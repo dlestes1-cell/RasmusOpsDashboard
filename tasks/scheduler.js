@@ -42,12 +42,19 @@ async function buildStageMap() {
   const hsKey = process.env.HUBSPOT_API_KEY;
   if (!hsKey) return;
   try {
-    const res  = await fetch(`${HUBSPOT_API}/crm/v3/properties/deals/dealstage`, {
+    const res  = await fetch(`${HUBSPOT_API}/crm/v3/pipelines/deals`, {
       headers: { Authorization: `Bearer ${hsKey}` }
     });
+    console.log('[DEBUG] buildStageMap status:', res.status);
     const data = await res.json();
-    (data.options || []).forEach(o => { stageMap[o.value] = o.label; });
-    console.log(`[TASK] Stage map: ${Object.keys(stageMap).length} stages`);
+    const pipelines = data.results || [];
+    console.log(`[DEBUG] buildStageMap: ${pipelines.length} pipelines found`);
+    pipelines.forEach(pipeline => {
+      (pipeline.stages || []).forEach(stage => {
+        stageMap[stage.id] = stage.label;
+      });
+    });
+    console.log(`[TASK] Stage map: ${Object.keys(stageMap).length} stages —`, JSON.stringify(stageMap));
   } catch (e) {
     console.error('[TASK] Stage map error:', e.message);
   }
@@ -58,23 +65,56 @@ async function runHubSpotSync() {
   const hsKey = process.env.HUBSPOT_API_KEY;
   if (!hsKey) { console.log('[TASK] No HUBSPOT_API_KEY'); return; }
   console.log('[TASK] Syncing HubSpot deals…');
+
+  const requestBody = {
+    limit: 200,
+    properties: ['dealname','dealstage','pipeline','closedate','description','amount'],
+    sorts: [{ propertyName: 'closedate', direction: 'ASCENDING' }],
+    filterGroups: [{ filters: [{ propertyName: 'dealstage', operator: 'NOT_IN', values: EXCLUDED_STAGE_IDS }] }]
+  };
+  console.log('[DEBUG] Request URL:', `${HUBSPOT_API}/crm/v3/objects/deals/search`);
+  console.log('[DEBUG] Request body:', JSON.stringify(requestBody, null, 2));
+  console.log('[DEBUG] Stage map size at sync time:', Object.keys(stageMap).length, '— entries:', JSON.stringify(stageMap, null, 2));
+
   try {
     const res = await fetch(`${HUBSPOT_API}/crm/v3/objects/deals/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hsKey}` },
-      body: JSON.stringify({
-        limit: 200,
-        properties: ['dealname','dealstage','pipeline','closedate','description','amount'],
-        sorts: [{ propertyName: 'closedate', direction: 'ASCENDING' }],
-        filterGroups: [{ filters: [{ propertyName: 'dealstage', operator: 'NOT_IN', values: EXCLUDED_STAGE_IDS }] }]
-      })
+      body: JSON.stringify(requestBody)
     });
-    const data   = await res.json();
-    const deals  = data.results || [];
+
+    console.log('[DEBUG] Response status:', res.status, res.statusText);
+    console.log('[DEBUG] Response headers:', JSON.stringify(Object.fromEntries(res.headers.entries()), null, 2));
+
+    const rawText = await res.text();
+    console.log('[DEBUG] Raw response body:', rawText);
+
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch (parseErr) {
+      console.error('[DEBUG] Failed to parse response as JSON:', parseErr.message);
+      addAlert({ type:'error', message:`⚠ HubSpot sync failed: unparseable response (status ${res.status})` });
+      if (broadcast) broadcast();
+      return;
+    }
+
+    const deals = data.results || [];
+    console.log(`[DEBUG] Total deals returned by API: ${deals.length}`);
+    console.log(`[DEBUG] data.total (if present): ${data.total}`);
+    console.log(`[DEBUG] data.paging (if present): ${JSON.stringify(data.paging)}`);
+
+    if (deals.length === 0) {
+      console.log('[DEBUG] No deals in response — possible causes: wrong pipeline, all stages excluded, API key scopes, or filter mismatch.');
+      console.log('[DEBUG] EXCLUDED_STAGE_IDS:', JSON.stringify(EXCLUDED_STAGE_IDS));
+    }
+
     const projects = deals.map(deal => {
       const p     = deal.properties;
       const stage = stageMap[p.dealstage] || p.dealstage || 'Unknown';
-      if (!ACTIVE_STAGE_LABELS.some(l => stage.toLowerCase().includes(l.toLowerCase()))) return null;
+      const stageMatches = ACTIVE_STAGE_LABELS.some(l => stage.toLowerCase().includes(l.toLowerCase()));
+      console.log(`[DEBUG] Deal ${deal.id} | dealstage ID: "${p.dealstage}" | resolved stage: "${stage}" | closedate: "${p.closedate}" | name: "${p.dealname}" | stage matches active list: ${stageMatches}`);
+      if (!stageMatches) return null;
       const jobMatch = (p.dealname || '').match(/^(R\d+)\s+(.*)/i);
       return {
         id:          String(deal.id),
@@ -92,12 +132,15 @@ async function runHubSpotSync() {
       };
     }).filter(Boolean);
 
+    console.log(`[DEBUG] Deals after active-stage filter: ${projects.length} of ${deals.length}`);
+
     setProjects(projects);
     addAlert({ type:'sync', message:`🔄 HubSpot sync — ${projects.length} active deals at ${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}` });
     console.log(`[TASK] HubSpot: ${projects.length} projects loaded`);
     if (broadcast) broadcast();
   } catch (e) {
     console.error('[TASK] HubSpot error:', e.message);
+    console.error('[TASK] HubSpot error stack:', e.stack);
     addAlert({ type:'error', message:`⚠ HubSpot sync failed: ${e.message}` });
     if (broadcast) broadcast();
   }
