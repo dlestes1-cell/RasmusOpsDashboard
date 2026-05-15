@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rasmus Auctions — Field Operations</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0d0b; --surface: #17160f; --surface2: #1f1e16;
+    --border: #2e2c1e; --gold: #c8a84b; --gold-dim: #8a7030;
+    --gold-bright: #e2c46a; --red: #c84b4b; --green: #4bc87a;
+    --amber: #c8944b; --blue: #4b8fc8;
+    --text: #e8e3d0; --text-dim: #7a7560; --text-mid: #b0aa90;
+    --mono: 'DM Mono', monospace; --sans: 'DM Sans', sans-serif;
+    --serif: 'Playfair Display', serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:var(--sans); min-height:100vh; display:flex; flex-direction:column; }
+
+  /* Header */
+  header { border-bottom:1px solid var(--border); padding:16px 28px; display:flex; align-items:center; justify-content:space-between; background:var(--surface); }
+  .logo-name { font-family:var(--serif); font-size:20px; color:var(--gold); letter-spacing:0.04em; }
+  .logo-sub  { font-family:var(--mono); font-size:9px; color:var(--text-dim); letter-spacing:0.15em; text-transform:uppercase; margin-top:2px; }
+  .header-right { display:flex; align-items:center; gap:16px; }
+  .live-clock { font-family:var(--mono); font-size:12px; color:var(--text-mid); }
+  .ws-indicator { display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:10px; color:var(--text-dim); }
+  .ws-dot { width:7px; height:7px; border-radius:50%; background:var(--text-dim); transition:background 0.4s; }
+  .ws-dot.live { background:var(--green); box-shadow:0 0 6px var(--green); }
+  .ws-dot.error { background:var(--red); }
+
+  /* Alerts bar */
+  #alertBar { display:none; background:rgba(200,75,75,0.08); border-bottom:1px solid rgba(200,75,75,0.25); padding:0 28px; }
+  #alertBar.has-alerts { display:block; }
+  .alert-item { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid rgba(200,75,75,0.1); font-size:12px; color:var(--red); font-family:var(--mono); gap:12px; }
+  .alert-item:last-child { border-bottom:none; }
+  .alert-dismiss { background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:14px; padding:0 4px; }
+  .alert-dismiss:hover { color:var(--red); }
+
+  /* Stats */
+  .stat-bar { display:flex; background:var(--surface); border-bottom:1px solid var(--border); }
+  .stat { flex:1; padding:14px 24px; border-right:1px solid var(--border); }
+  .stat:last-child { border-right:none; }
+  .stat-label { font-family:var(--mono); font-size:9px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.15em; }
+  .stat-value { font-family:var(--mono); font-size:24px; font-weight:500; color:var(--gold); line-height:1.1; margin-top:2px; }
+  .stat-value.green { color:var(--green); } .stat-value.amber { color:var(--amber); } .stat-value.red { color:var(--red); }
+
+  /* Layout */
+  main { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--border); flex:1; }
+  .panel { background:var(--surface); display:flex; flex-direction:column; }
+  .panel-header { padding:18px 24px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .panel-title { font-family:var(--serif); font-size:16px; color:var(--text); display:flex; align-items:center; gap:10px; }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--gold); animation:pulse 2.5s ease-in-out infinite; }
+  .dot.amber { background:var(--amber); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .add-btn { background:none; border:1px solid var(--gold-dim); color:var(--gold); font-family:var(--mono); font-size:10px; padding:5px 12px; cursor:pointer; letter-spacing:0.1em; transition:all 0.2s; }
+  .add-btn:hover { background:var(--gold); color:var(--bg); }
+  .panel-body { flex:1; overflow-y:auto; padding:14px 24px; display:flex; flex-direction:column; gap:10px; }
+  .panel-body::-webkit-scrollbar { width:3px; }
+  .panel-body::-webkit-scrollbar-thumb { background:var(--border); }
+
+  /* Add Forms */
+  .add-form { display:none; background:var(--surface2); border:1px solid var(--gold-dim); padding:16px; flex-direction:column; gap:10px; animation:fadein 0.2s ease; }
+  .add-form.open { display:flex; }
+  @keyframes fadein { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+  .form-row { display:flex; gap:10px; }
+  .form-group { display:flex; flex-direction:column; gap:4px; flex:1; }
+  .form-group label { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-dim); }
+  .form-group input, .form-group select { background:var(--bg); border:1px solid var(--border); color:var(--text); font-family:var(--mono); font-size:11px; padding:7px 9px; outline:none; width:100%; }
+  .form-group input:focus, .form-group select:focus { border-color:var(--gold-dim); }
+  .form-actions { display:flex; gap:8px; justify-content:flex-end; }
+  .btn-primary { background:var(--gold); color:var(--bg); border:none; padding:7px 18px; font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; font-weight:500; }
+  .btn-secondary { background:none; border:1px solid var(--border); color:var(--text-mid); padding:7px 18px; font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; }
+
+  /* Project Cards */
+  .project-card { border:1px solid var(--border); background:var(--surface2); padding:13px 16px; display:flex; flex-direction:column; gap:9px; transition:border-color 0.2s; }
+  .project-card:hover { border-color:var(--gold-dim); }
+  .pc-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .project-name { font-size:13px; font-weight:600; color:var(--text); }
+  .project-loc  { font-family:var(--mono); font-size:10px; color:var(--text-dim); margin-top:2px; }
+  .status-badge { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.12em; padding:3px 7px; border-radius:2px; white-space:nowrap; }
+  .status-badge.on-track        { background:rgba(75,200,122,.1); color:var(--green); border:1px solid rgba(75,200,122,.25); }
+  .status-badge.at-risk         { background:rgba(200,148,75,.1); color:var(--amber); border:1px solid rgba(200,148,75,.25); }
+  .status-badge.needs-attention { background:rgba(200,75,75,.1);  color:var(--red);   border:1px solid rgba(200,75,75,.25); }
+  .status-badge.complete        { background:rgba(75,143,200,.1); color:var(--blue);  border:1px solid rgba(75,143,200,.25); }
+  .project-notes { font-size:11px; color:var(--text-dim); }
+  .pc-actions { display:flex; gap:6px; align-items:center; }
+  .status-select { background:var(--bg); border:1px solid var(--border); color:var(--text-mid); font-family:var(--mono); font-size:10px; padding:4px 7px; cursor:pointer; flex:1; }
+  .status-select:focus { outline:none; border-color:var(--gold-dim); }
+  .ai-btn { background:none; border:1px solid var(--gold-dim); color:var(--gold); font-family:var(--mono); font-size:10px; padding:4px 9px; cursor:pointer; white-space:nowrap; transition:all 0.2s; }
+  .ai-btn:hover:not(:disabled) { background:var(--gold); color:var(--bg); }
+  .ai-btn:disabled { opacity:.35; cursor:not-allowed; }
+  .del-btn { background:none; border:1px solid var(--border); color:var(--text-dim); font-family:var(--mono); font-size:10px; padding:4px 7px; cursor:pointer; transition:all 0.2s; }
+  .del-btn:hover { border-color:var(--red); color:var(--red); }
+  .ai-summary { background:var(--bg); border-left:2px solid var(--gold-dim); padding:9px 12px; font-size:11px; color:var(--text-mid); line-height:1.6; font-style:italic; display:none; animation:fadein 0.3s ease; }
+  .ai-summary.visible { display:block; }
+
+  /* Email Cards */
+  .email-card { border:1px solid var(--border); background:var(--surface2); padding:13px 16px; display:flex; flex-direction:column; gap:8px; transition:border-color 0.2s; }
+  .email-card:hover { border-color:var(--gold-dim); }
+  .email-card.sent { opacity:.45; }
+  .email-card.flagged { border-color:rgba(200,75,75,.4); }
+  .ec-top { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .email-site { font-size:13px; font-weight:600; color:var(--text); flex:1; }
+  .countdown { font-family:var(--mono); font-size:11px; padding:3px 7px; border-radius:2px; white-space:nowrap; }
+  .countdown.urgent  { color:var(--red);   border:1px solid rgba(200,75,75,.3);   background:rgba(200,75,75,.07); }
+  .countdown.warning { color:var(--amber); border:1px solid rgba(200,148,75,.3);  background:rgba(200,148,75,.07); }
+  .countdown.ok      { color:var(--green); border:1px solid rgba(75,200,122,.3);  background:rgba(75,200,122,.07); }
+  .countdown.done    { color:var(--blue);  border:1px solid rgba(75,143,200,.3);  background:rgba(75,143,200,.07); }
+  .email-meta { display:flex; gap:18px; flex-wrap:wrap; }
+  .meta-item { display:flex; flex-direction:column; gap:2px; }
+  .meta-label { font-family:var(--mono); font-size:9px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.12em; }
+  .meta-value { font-family:var(--mono); font-size:11px; color:var(--text-mid); }
+  .ec-actions { display:flex; gap:6px; align-items:center; }
+  .send-btn { background:var(--green); color:var(--bg); border:none; font-family:var(--mono); font-size:10px; padding:5px 11px; cursor:pointer; text-transform:uppercase; letter-spacing:0.08em; font-weight:500; transition:filter 0.2s; }
+  .send-btn:hover:not(:disabled) { filter:brightness(1.15); }
+  .send-btn:disabled { background:var(--border); color:var(--text-dim); cursor:not-allowed; }
+  .draft-btn { background:none; border:1px solid var(--gold-dim); color:var(--gold); font-family:var(--mono); font-size:10px; padding:5px 11px; cursor:pointer; transition:all 0.2s; }
+  .draft-btn:hover:not(:disabled) { background:var(--gold); color:var(--bg); }
+  .draft-btn:disabled { opacity:.35; cursor:not-allowed; }
+
+  /* Draft Modal */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:1000; align-items:center; justify-content:center; padding:20px; }
+  .modal-overlay.open { display:flex; }
+  .modal-inner { background:var(--surface2); border:1px solid var(--gold-dim); padding:28px; width:580px; max-width:95vw; max-height:85vh; overflow-y:auto; display:flex; flex-direction:column; gap:14px; }
+  .modal-inner h2 { font-family:var(--serif); color:var(--gold); font-size:17px; }
+  .modal-inner p  { font-size:11px; color:var(--text-dim); line-height:1.6; }
+  .draft-body { background:var(--bg); border:1px solid var(--border); padding:14px; font-size:12px; color:var(--text-mid); line-height:1.75; white-space:pre-wrap; font-family:var(--sans); min-height:160px; }
+  .draft-loading { color:var(--gold); font-family:var(--mono); font-size:11px; text-align:center; padding:28px; animation:blink 1.2s step-end infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .modal-btns { display:flex; gap:8px; justify-content:flex-end; }
+
+  /* Empty state */
+  .empty-state { text-align:center; padding:40px 20px; color:var(--text-dim); font-family:var(--mono); font-size:11px; letter-spacing:0.05em; }
+  .empty-state .icon { font-size:28px; margin-bottom:10px; opacity:.4; }
+
+  /* Footer */
+  footer { border-top:1px solid var(--border); padding:9px 28px; display:flex; justify-content:space-between; align-items:center; background:var(--surface); }
+  .footer-text { font-family:var(--mono); font-size:9px; color:var(--text-dim); letter-spacing:0.08em; }
+</style>
+</head>
+<body>
+
+<!-- Draft Modal -->
+<div class="modal-overlay" id="draftModal">
+  <div class="modal-inner">
+    <h2>AI-Generated Confirmation Email</h2>
+    <p id="draftMeta"></p>
+    <div id="draftContent" class="draft-body"></div>
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeDraft()">Close</button>
+      <button class="btn-primary" onclick="copyDraft()">Copy to Clipboard</button>
+    </div>
+  </div>
+</div>
+
+<header>
+  <div>
+    <div class="logo-name">Rasmus Auctions</div>
+    <div class="logo-sub">Field Operations · Project Command</div>
+  </div>
+  <div class="header-right">
+    <div class="live-clock" id="clock"></div>
+    <div class="ws-indicator">
+      <div class="ws-dot" id="wsDot"></div>
+      <span id="wsLabel">connecting…</span>
+    </div>
+  </div>
+</header>
+
+<!-- Alerts -->
+<div id="alertBar">
+  <div id="alertList"></div>
+</div>
+
+<!-- Stats -->
+<div class="stat-bar">
+  <div class="stat"><div class="stat-label">Active Projects</div><div class="stat-value" id="sActive">—</div></div>
+  <div class="stat"><div class="stat-label">On Track</div><div class="stat-value green" id="sOnTrack">—</div></div>
+  <div class="stat"><div class="stat-label">At Risk / Needs Attn.</div><div class="stat-value amber" id="sAtRisk">—</div></div>
+  <div class="stat"><div class="stat-label">Emails Pending</div><div class="stat-value red" id="sPending">—</div></div>
+  <div class="stat"><div class="stat-label">Confirmed</div><div class="stat-value" id="sDone">—</div></div>
+  <div class="stat"><div class="stat-label">Overdue</div><div class="stat-value red" id="sOverdue">—</div></div>
+</div>
+
+<main>
+  <!-- Projects -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title"><span class="dot"></span> Active Projects</div>
+      <button class="add-btn" onclick="toggleForm('addProject')">+ Add Project</button>
+    </div>
+    <div class="panel-body">
+      <div class="add-form" id="addProject">
+        <div class="form-row">
+          <div class="form-group"><label>Project Name</label><input id="pName" placeholder="Estate of J. Smith" /></div>
+          <div class="form-group" style="max-width:130px"><label>Auction Date</label><input type="date" id="pDate" /></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Location</label><input id="pLoc" placeholder="Springfield, VA" /></div>
+          <div class="form-group" style="max-width:160px">
+            <label>Status</label>
+            <select id="pStatus">
+              <option value="on-track">On Track</option>
+              <option value="at-risk">At Risk</option>
+              <option value="needs-attention">Needs Attention</option>
+              <option value="complete">Complete</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group"><label>Notes</label><input id="pNotes" placeholder="Any relevant notes…" /></div>
+        <div class="form-actions">
+          <button class="btn-secondary" onclick="toggleForm('addProject')">Cancel</button>
+          <button class="btn-primary" onclick="submitProject()">Add Project</button>
+        </div>
+      </div>
+      <div id="projectList"></div>
+    </div>
+  </div>
+
+  <!-- Confirmations -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title"><span class="dot amber"></span> Site Confirmations</div>
+      <button class="add-btn" onclick="toggleForm('addEmail')">+ Add Site</button>
+    </div>
+    <div class="panel-body">
+      <div class="add-form" id="addEmail">
+        <div class="form-row">
+          <div class="form-group"><label>Site / Client Name</label><input id="eSite" placeholder="Fairview Estate" /></div>
+          <div class="form-group"><label>Recipient Email</label><input id="eEmail" placeholder="contact@estate.com" /></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Completed (date/time)</label><input type="datetime-local" id="eCompleted" /></div>
+          <div class="form-group"><label>Project</label><input id="eProject" placeholder="Link to project…" /></div>
+        </div>
+        <div class="form-actions">
+          <button class="btn-secondary" onclick="toggleForm('addEmail')">Cancel</button>
+          <button class="btn-primary" onclick="submitEmail()">Add Site</button>
+        </div>
+      </div>
+      <div id="emailList"></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="footer-text">Rasmus Auctions · Field Operations Dashboard · Railway</div>
+  <div class="footer-text" id="lastSync">Waiting for server…</div>
+</footer>
+
+<script>
+// ── WebSocket connection ───────────────────────────────────────
+const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+let ws, reconnectTimer;
+let state = { projects: [], confirmations: [], alerts: [] };
+let currentDraftText = '';
+
+function connect() {
+  ws = new WebSocket(`${proto}://${location.host}`);
+
+  ws.onopen = () => {
+    setWsStatus('live', 'live');
+    clearTimeout(reconnectTimer);
+  };
+
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'state') {
+      state = msg.data;
+      render();
+      document.getElementById('lastSync').textContent =
+        'Last sync: ' + new Date().toLocaleTimeString();
+    }
+  };
+
+  ws.onclose = () => {
+    setWsStatus('error', 'reconnecting…');
+    reconnectTimer = setTimeout(connect, 4000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+function setWsStatus(cls, label) {
+  document.getElementById('wsDot').className = 'ws-dot ' + cls;
+  document.getElementById('wsLabel').textContent = label;
+}
+
+connect();
+
+// ── Clock ─────────────────────────────────────────────────────
+function tick() {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('en-US', { hour12:false }) + ' — ' +
+    new Date().toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
+  renderCountdowns(); // update countdowns every second
+}
+setInterval(tick, 1000); tick();
+
+// ── Render ────────────────────────────────────────────────────
+function render() {
+  renderStats();
+  renderAlerts();
+  renderProjects();
+  renderEmails();
+}
+
+function renderStats() {
+  const p = state.projects || [];
+  const c = state.confirmations || [];
+  const now = Date.now();
+  set('sActive',  p.filter(x => x.status !== 'complete').length);
+  set('sOnTrack', p.filter(x => x.status === 'on-track').length);
+  set('sAtRisk',  p.filter(x => x.status === 'at-risk' || x.status === 'needs-attention').length);
+  set('sPending', c.filter(x => !x.sent && (now - x.completedAt) < 864e5).length);
+  set('sDone',    c.filter(x => x.sent).length);
+  set('sOverdue', c.filter(x => !x.sent && (now - x.completedAt) >= 864e5).length);
+}
+
+function renderAlerts() {
+  const alerts = state.alerts || [];
+  const bar  = document.getElementById('alertBar');
+  const list = document.getElementById('alertList');
+  if (!alerts.length) { bar.classList.remove('has-alerts'); return; }
+  bar.classList.add('has-alerts');
+  list.innerHTML = alerts.map(a => `
+    <div class="alert-item">
+      <span>${esc(a.message)}</span>
+      <button class="alert-dismiss" onclick="dismissAlert('${a.id}')">✕</button>
+    </div>`).join('');
+}
+
+function renderProjects() {
+  const el = document.getElementById('projectList');
+  const p  = state.projects || [];
+  if (!p.length) { el.innerHTML = emptyState('📋', 'No active projects.'); return; }
+  el.innerHTML = p.map(proj => `
+    <div class="project-card" id="pc-${proj.id}">
+      <div class="pc-top">
+        <div>
+          <div class="project-name">${esc(proj.name)}</div>
+          <div class="project-loc">📍 ${esc(proj.location||'')} ${proj.date ? '&nbsp;·&nbsp; 🗓 '+proj.date : ''}</div>
+        </div>
+        <span class="status-badge ${proj.status}">${statusLabel(proj.status)}</span>
+      </div>
+      ${proj.notes ? `<div class="project-notes">${esc(proj.notes)}</div>` : ''}
+      <div class="pc-actions">
+        <select class="status-select" onchange="patchProject('${proj.id}', {status:this.value})">
+          <option value="on-track"        ${proj.status==='on-track'?'selected':''}>On Track</option>
+          <option value="at-risk"         ${proj.status==='at-risk'?'selected':''}>At Risk</option>
+          <option value="needs-attention" ${proj.status==='needs-attention'?'selected':''}>Needs Attention</option>
+          <option value="complete"        ${proj.status==='complete'?'selected':''}>Complete</option>
+        </select>
+        <button class="ai-btn" onclick="aiSummary('${proj.id}')">✦ Summary</button>
+        <button class="del-btn" onclick="deleteProject('${proj.id}')">✕</button>
+      </div>
+      ${proj.summaryText ? `<div class="ai-summary visible">${esc(proj.summaryText)}</div>` : ''}
+    </div>`).join('');
+}
+
+function renderEmails() {
+  const el = document.getElementById('emailList');
+  const c  = [...(state.confirmations||[])].sort((a,b) => {
+    if (a.sent && !b.sent) return 1;
+    if (!a.sent && b.sent) return -1;
+    return (a.completedAt + 864e5 - Date.now()) - (b.completedAt + 864e5 - Date.now());
+  });
+  if (!c.length) { el.innerHTML = emptyState('📧', 'No site confirmations tracked.'); return; }
+  el.innerHTML = c.map(e => {
+    const cd = e.sent ? { label:'Sent ✓', cls:'done' } : countdown(e.completedAt);
+    return `
+    <div class="email-card ${e.sent?'sent':''} ${e.flagged&&!e.sent?'flagged':''}" id="ec-${e.id}">
+      <div class="ec-top">
+        <div class="email-site">${esc(e.site)}</div>
+        <div class="countdown ${cd.cls}">${cd.label}</div>
+      </div>
+      <div class="email-meta">
+        <div class="meta-item"><div class="meta-label">Recipient</div><div class="meta-value">${esc(e.recipient||'—')}</div></div>
+        <div class="meta-item"><div class="meta-label">Completed</div><div class="meta-value">${fmtDate(e.completedAt)}</div></div>
+        ${e.project?`<div class="meta-item"><div class="meta-label">Project</div><div class="meta-value">${esc(e.project)}</div></div>`:''}
+      </div>
+      <div class="ec-actions">
+        <button class="draft-btn" onclick="aiDraft('${e.id}')" ${e.sent?'disabled':''}>✦ Draft Email</button>
+        <button class="send-btn" onclick="markSent('${e.id}')" ${e.sent?'disabled':''}>
+          ${e.sent?'Confirmed':'Mark as Sent'}
+        </button>
+        <button class="del-btn" onclick="deleteEmail('${e.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Update just the countdown timers without full re-render
+function renderCountdowns() {
+  (state.confirmations||[]).forEach(e => {
+    const el = document.querySelector(`#ec-${e.id} .countdown`);
+    if (!el) return;
+    const cd = e.sent ? { label:'Sent ✓', cls:'done' } : countdown(e.completedAt);
+    el.className = 'countdown ' + cd.cls;
+    el.textContent = cd.label;
+  });
+}
+
+// ── API calls ─────────────────────────────────────────────────
+async function patchProject(id, patch) {
+  await fetch(`/api/projects/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(patch) });
+}
+async function deleteProject(id) {
+  await fetch(`/api/projects/${id}`, { method:'DELETE' });
+}
+async function markSent(id) {
+  await fetch(`/api/confirmations/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ sent:true }) });
+}
+async function deleteEmail(id) {
+  await fetch(`/api/confirmations/${id}`, { method:'DELETE' });
+}
+async function dismissAlert(id) {
+  await fetch(`/api/alerts/${id}`, { method:'DELETE' });
+}
+
+async function submitProject() {
+  const name = document.getElementById('pName').value.trim();
+  if (!name) return alert('Project name required.');
+  await fetch('/api/projects', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      name, location: document.getElementById('pLoc').value.trim(),
+      date: document.getElementById('pDate').value,
+      status: document.getElementById('pStatus').value,
+      notes: document.getElementById('pNotes').value.trim()
+    })
+  });
+  toggleForm('addProject');
+  ['pName','pLoc','pDate','pNotes'].forEach(id => document.getElementById(id).value='');
+}
+
+async function submitEmail() {
+  const site = document.getElementById('eSite').value.trim();
+  if (!site) return alert('Site name required.');
+  const dt = document.getElementById('eCompleted').value;
+  await fetch('/api/confirmations', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      site, recipient: document.getElementById('eEmail').value.trim(),
+      project: document.getElementById('eProject').value.trim(),
+      completedAt: dt ? new Date(dt).getTime() : Date.now()
+    })
+  });
+  toggleForm('addEmail');
+  ['eSite','eEmail','eCompleted','eProject'].forEach(id => document.getElementById(id).value='');
+}
+
+async function aiSummary(projectId) {
+  const btn = document.querySelector(`#pc-${projectId} .ai-btn`);
+  if (btn) { btn.disabled=true; btn.textContent='…'; }
+  await fetch('/api/ai/summary', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ projectId }) });
+  if (btn) { btn.disabled=false; btn.textContent='✦ Summary'; }
+}
+
+async function aiDraft(confirmationId) {
+  const e = (state.confirmations||[]).find(x => x.id === confirmationId);
+  document.getElementById('draftMeta').textContent = `For: ${e?.site || ''} → ${e?.recipient || 'recipient'}`;
+  document.getElementById('draftContent').innerHTML = '<div class="draft-loading">Generating via Claude…</div>';
+  document.getElementById('draftModal').classList.add('open');
+  currentDraftText = '';
+
+  const res  = await fetch('/api/ai/draft-email', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ confirmationId }) });
+  const data = await res.json();
+  currentDraftText = data.text || data.error || 'Error generating draft.';
+  document.getElementById('draftContent').textContent = currentDraftText;
+}
+
+function closeDraft() { document.getElementById('draftModal').classList.remove('open'); }
+function copyDraft() {
+  navigator.clipboard.writeText(currentDraftText).then(() => {
+    const btn = document.querySelector('.modal-inner .btn-primary');
+    btn.textContent='Copied!'; setTimeout(()=>btn.textContent='Copy to Clipboard',2000);
+  });
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+function toggleForm(id) {
+  const f = document.getElementById(id);
+  f.classList.toggle('open');
+  if (id==='addEmail' && f.classList.contains('open')) {
+    const n = new Date(); n.setMinutes(n.getMinutes()-n.getTimezoneOffset());
+    document.getElementById('eCompleted').value = n.toISOString().slice(0,16);
+  }
+}
+function set(id, val) { document.getElementById(id).textContent = val; }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function statusLabel(s) { return {  'on-track':'On Track','at-risk':'At Risk','needs-attention':'Needs Attention','complete':'Complete'}[s]||s; }
+function fmtDate(ts) { return new Date(ts).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }
+function emptyState(icon, msg) { return `<div class="empty-state"><div class="icon">${icon}</div>${msg}<br><span style="opacity:.6">Use the button above to add one.</span></div>`; }
+function countdown(completedAt) {
+  const ms = (completedAt + 864e5) - Date.now();
+  if (ms <= 0) return { label:'OVERDUE', cls:'urgent' };
+  const h = Math.floor(ms/3600000), m = Math.floor((ms%3600000)/60000);
+  if (h < 3)  return { label:`${h}h ${m}m left`, cls:'urgent' };
+  if (h < 10) return { label:`${h}h ${m}m left`, cls:'warning' };
+  return { label:`${h}h ${m}m left`, cls:'ok' };
+}
+</script>
+</body>
+</html>
