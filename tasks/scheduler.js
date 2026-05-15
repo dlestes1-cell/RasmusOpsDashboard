@@ -1,5 +1,6 @@
 // tasks/scheduler.js — HubSpot + Gmail integrated
-const cron = require('node-cron');
+const cron  = require('node-cron');
+const gmail = require('./gmail');
 const {
   getConfirmations, updateConfirmation, addAlert,
   getProjects, updateProject, setProjects
@@ -7,17 +8,14 @@ const {
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
 const HUBSPOT_API   = 'https://api.hubapi.com';
-const GMAIL_API     = 'https://gmail.googleapis.com/gmail/v1';
 const WINDOW_MS     = 24 * 60 * 60 * 1000;
 
-// Active stages — deals in these appear on dashboard
 const ACTIVE_STAGE_LABELS = [
   'New Auction', 'Identification', 'Auction Posting',
   'Staffing', 'Quality Control', 'Selling & Closing', 'Reconciliation',
   'Selling Online', 'Live show', 'Onboarding', 'ID In-process'
 ];
 
-// Excluded stage IDs (Reconciled, Cancelled, Archived across all pipelines)
 const EXCLUDED_STAGE_IDS = [
   '1300469340','1320719876','997854466','998000723','997964862','1070887958',
   '1044146096','1044046920','1006697529','1006697530','1006750136'
@@ -26,7 +24,7 @@ const EXCLUDED_STAGE_IDS = [
 function stageToStatus(label) {
   if (!label) return 'on-track';
   const l = label.toLowerCase();
-  if (l.includes('reconciliation'))                                          return 'needs-attention';
+  if (l.includes('reconciliation'))   return 'needs-attention';
   if (l.includes('selling & closing') || l.includes('selling online') || l.includes('live show')) return 'at-risk';
   return 'on-track';
 }
@@ -39,7 +37,7 @@ function daysBefore(n) {
 let broadcast;
 let stageMap = {};
 
-// ── Build stage ID→label map ──────────────────────────────────
+// ── Build HubSpot stage map ───────────────────────────────────
 async function buildStageMap() {
   const hsKey = process.env.HUBSPOT_API_KEY;
   if (!hsKey) return;
@@ -49,17 +47,16 @@ async function buildStageMap() {
     });
     const data = await res.json();
     (data.options || []).forEach(o => { stageMap[o.value] = o.label; });
-    console.log(`[TASK] Stage map: ${Object.keys(stageMap).length} stages loaded`);
+    console.log(`[TASK] Stage map: ${Object.keys(stageMap).length} stages`);
   } catch (e) {
-    console.error('[TASK] Stage map failed:', e.message);
+    console.error('[TASK] Stage map error:', e.message);
   }
 }
 
-// ── TASK 1: HubSpot deal sync — 8:00 AM daily ────────────────
+// ── TASK 1: HubSpot sync — 8:00 AM ───────────────────────────
 async function runHubSpotSync() {
   const hsKey = process.env.HUBSPOT_API_KEY;
-  if (!hsKey) { console.log('[TASK] No HUBSPOT_API_KEY — skipping'); return; }
-
+  if (!hsKey) { console.log('[TASK] No HUBSPOT_API_KEY'); return; }
   console.log('[TASK] Syncing HubSpot deals…');
   try {
     const res = await fetch(`${HUBSPOT_API}/crm/v3/objects/deals/search`, {
@@ -67,20 +64,17 @@ async function runHubSpotSync() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hsKey}` },
       body: JSON.stringify({
         limit: 200,
-        properties: ['dealname','dealstage','pipeline','closedate','hubspot_owner_id','description','amount'],
+        properties: ['dealname','dealstage','pipeline','closedate','description','amount'],
         sorts: [{ propertyName: 'closedate', direction: 'ASCENDING' }],
         filterGroups: [{ filters: [{ propertyName: 'dealstage', operator: 'NOT_IN', values: EXCLUDED_STAGE_IDS }] }]
       })
     });
-
-    const data  = await res.json();
-    const deals = (data.results || []);
-
+    const data   = await res.json();
+    const deals  = data.results || [];
     const projects = deals.map(deal => {
       const p     = deal.properties;
       const stage = stageMap[p.dealstage] || p.dealstage || 'Unknown';
       if (!ACTIVE_STAGE_LABELS.some(l => stage.toLowerCase().includes(l.toLowerCase()))) return null;
-
       const jobMatch = (p.dealname || '').match(/^(R\d+)\s+(.*)/i);
       return {
         id:          String(deal.id),
@@ -99,21 +93,20 @@ async function runHubSpotSync() {
     }).filter(Boolean);
 
     setProjects(projects);
-    addAlert({ type:'sync', message:`🔄 HubSpot sync — ${projects.length} active deals loaded at ${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}` });
-    console.log(`[TASK] HubSpot sync: ${projects.length} projects`);
+    addAlert({ type:'sync', message:`🔄 HubSpot sync — ${projects.length} active deals at ${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}` });
+    console.log(`[TASK] HubSpot: ${projects.length} projects loaded`);
     if (broadcast) broadcast();
   } catch (e) {
-    console.error('[TASK] HubSpot sync error:', e.message);
+    console.error('[TASK] HubSpot error:', e.message);
     addAlert({ type:'error', message:`⚠ HubSpot sync failed: ${e.message}` });
     if (broadcast) broadcast();
   }
 }
 
-// ── TASK 2: Gmail confirmation scan — 8:05 AM daily ──────────
+// ── TASK 2: Gmail scan — 8:05 AM ─────────────────────────────
 async function runGmailSync() {
-  const token = process.env.GMAIL_ACCESS_TOKEN;
-  if (!token) { console.log('[TASK] No GMAIL_ACCESS_TOKEN — skipping'); return; }
-
+  const hasGmail = process.env.GMAIL_REFRESH_TOKEN && process.env.GMAIL_CLIENT_ID;
+  if (!hasGmail) { console.log('[TASK] No Gmail credentials — skipping'); return; }
   console.log('[TASK] Scanning Gmail…');
   try {
     const confs = getConfirmations();
@@ -121,37 +114,33 @@ async function runGmailSync() {
       if (c.sent) continue;
 
       // Check sent mail for outbound confirmation
-      const sentQ   = encodeURIComponent(`in:sent "${c.site}" after:${daysBefore(2)}`);
-      const sentRes = await fetch(`${GMAIL_API}/users/me/messages?q=${sentQ}&maxResults=5`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const sentData = await sentRes.json();
-
-      if ((sentData.messages || []).length > 0) {
+      const sentMsgs = await gmail.searchMessages(
+        `in:sent "${c.site}" after:${daysBefore(2)}`, 5
+      );
+      if (sentMsgs.length > 0) {
         updateConfirmation(c.id, { sent: true });
         addAlert({ type:'confirmed', confirmationId:c.id, message:`✅ Gmail: Confirmation sent for "${c.site}" — auto-marked.` });
         console.log(`[TASK] Gmail auto-confirmed: ${c.site}`);
       } else if (c.recipient) {
         // Check for client reply
-        const replyQ   = encodeURIComponent(`from:${c.recipient} "${c.site}" after:${daysBefore(3)}`);
-        const replyRes = await fetch(`${GMAIL_API}/users/me/messages?q=${replyQ}&maxResults=3`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const replyData = await replyRes.json();
-        if ((replyData.messages || []).length > 0) {
+        const replyMsgs = await gmail.searchMessages(
+          `from:${c.recipient} "${c.site}" after:${daysBefore(3)}`, 3
+        );
+        if (replyMsgs.length > 0) {
           updateConfirmation(c.id, { replied: true });
           addAlert({ type:'reply', confirmationId:c.id, message:`📬 "${c.site}" — client replied. Check inbox.` });
+          console.log(`[TASK] Gmail reply detected: ${c.site}`);
         }
       }
       await new Promise(r => setTimeout(r, 300));
     }
     if (broadcast) broadcast();
   } catch (e) {
-    console.error('[TASK] Gmail sync error:', e.message);
+    console.error('[TASK] Gmail error:', e.message);
   }
 }
 
-// ── TASK 3: 24hr confirmation checker — every 5 min ──────────
+// ── TASK 3: 24hr checker — every 5 min ───────────────────────
 function runConfirmationCheck() {
   const ts = Date.now();
   let changed = false;
@@ -160,7 +149,7 @@ function runConfirmationCheck() {
     const left = WINDOW_MS - (ts - c.completedAt);
     if (left <= 0 && !c.flagged) {
       updateConfirmation(c.id, { flagged: true });
-      addAlert({ type:'overdue', confirmationId:c.id, message:`⚠ OVERDUE: "${c.site}" passed the 24-hour window.` });
+      addAlert({ type:'overdue', confirmationId:c.id, message:`⚠ OVERDUE: "${c.site}" passed 24-hour window.` });
       changed = true;
     } else if (left > 0 && left <= 3*3600000 && !c.warnedAt) {
       updateConfirmation(c.id, { warnedAt: ts });
@@ -171,7 +160,7 @@ function runConfirmationCheck() {
   if (changed && broadcast) broadcast();
 }
 
-// ── TASK 4: AI status scan — every 6 hours ───────────────────
+// ── TASK 4: AI scan — every 6 hours ──────────────────────────
 async function runAIStatusScan() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return;
@@ -193,7 +182,7 @@ async function runAIStatusScan() {
       const text = data.content?.[0]?.text;
       if (text) updateProject(p.id, { summaryText: text });
     } catch (e) {
-      console.error(`[TASK] AI scan error for ${p.name}:`, e.message);
+      console.error(`[TASK] AI error for ${p.name}:`, e.message);
     }
     await new Promise(r => setTimeout(r, 1500));
   }
@@ -205,13 +194,12 @@ async function init(broadcastFn) {
   broadcast = broadcastFn;
   await buildStageMap();
 
-  // Daily 8am ET — set TZ=America/New_York in Railway environment variables
+  // Set TZ=America/New_York in Railway vars for 8am ET
   cron.schedule('0 8 * * *',   () => runHubSpotSync());
   cron.schedule('5 8 * * *',   () => runGmailSync());
   cron.schedule('*/5 * * * *', () => runConfirmationCheck());
   cron.schedule('0 */6 * * *', () => runAIStatusScan());
 
-  // Startup run
   console.log('[CRON] Running startup sync…');
   await runHubSpotSync();
   runConfirmationCheck();
