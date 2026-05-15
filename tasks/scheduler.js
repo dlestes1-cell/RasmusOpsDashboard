@@ -66,7 +66,7 @@ async function runHubSpotSync() {
         limit: 200,
         properties: ['dealname','dealstage','pipeline','closedate','description','amount'],
         sorts: [{ propertyName: 'closedate', direction: 'ASCENDING' }],
-        filterGroups: [{ filters: [{ propertyName: 'dealstage', operator: 'NOT_IN', values: EXCLUDED_STAGE_IDS }] }]
+        filterGroups: [{ filters: [{ propertyName: 'dealstage', operator: 'NOT_IN', values: EXCLUDED_STAGE_IDS }, { propertyName: 'closedate', operator: 'GTE', value: String(Date.now()) }] }]
       })
     });
     const data   = await res.json();
