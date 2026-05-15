@@ -62,6 +62,7 @@ function updateProject(id, patch) {
   if (i !== -1) state.projects[i] = { ...state.projects[i], ...patch };
 }
 function deleteProject(id)      { state.projects = state.projects.filter(p => p.id !== id); }
+function setProjects(projects)  { state.projects = projects; } // used by HubSpot sync
 
 // ── Confirmations ─────────────────────────────────────────────
 function getConfirmations()       { return state.confirmations; }
@@ -92,7 +93,7 @@ function getSnapshot() {
 }
 
 module.exports = {
-  getProjects, getProject, addProject, updateProject, deleteProject,
+  getProjects, getProject, addProject, updateProject, deleteProject, setProjects,
   getConfirmations, getConfirmation, addConfirmation, updateConfirmation, deleteConfirmation,
   getAlerts, addAlert, clearAlert,
   getSnapshot
