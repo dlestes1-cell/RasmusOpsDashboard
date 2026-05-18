@@ -44,9 +44,17 @@ app.get('/api/projects', (req, res) => {
 });
 
 app.post('/api/projects', (req, res) => {
-  const { name, location, date, status, notes } = req.body;
+  const { name, location, date, status, notes, contactName, contactPhone, contactEmail } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
-  state.addProject({ name, location, date, status: status || 'on-track', notes: notes || '' });
+  state.addProject({ name, location, date, status: status || 'on-track', notes: notes || '', contactName: contactName || '', contactPhone: contactPhone || '', contactEmail: contactEmail || '' });
+  broadcast();
+  res.json({ ok: true });
+});
+
+app.post('/api/projects/:id/log', (req, res) => {
+  const { text } = req.body;
+  if (!text) return res.status(400).json({ error: 'text required' });
+  state.addActivityLog(req.params.id, text);
   broadcast();
   res.json({ ok: true });
 });

@@ -57,13 +57,27 @@ let state = {
 // ── Projects ─────────────────────────────────────────────────
 function getProjects()          { return state.projects; }
 function getProject(id)         { return state.projects.find(p => p.id === id); }
-function addProject(data)       { state.projects.push({ id: uid(), createdAt: now(), summaryText: '', ...data }); }
+function addProject(data)       { state.projects.push({ id: uid(), createdAt: now(), summaryText: '', contactName: '', contactPhone: '', contactEmail: '', activityLog: [], ...data }); }
 function updateProject(id, patch) {
   const i = state.projects.findIndex(p => p.id === id);
   if (i !== -1) state.projects[i] = { ...state.projects[i], ...patch };
 }
+function addActivityLog(id, text) {
+  const i = state.projects.findIndex(p => p.id === id);
+  if (i === -1) return;
+  const log = state.projects[i].activityLog || [];
+  state.projects[i] = { ...state.projects[i], activityLog: [{ id: uid(), ts: now(), text }, ...log] };
+}
 function deleteProject(id)      { state.projects = state.projects.filter(p => p.id !== id); }
-function setProjects(projects)  { state.projects = projects; } // used by HubSpot sync
+function setProjects(incoming) {
+  const keep = {};
+  state.projects.forEach(p => { keep[p.id] = p; });
+  state.projects = incoming.map(p => {
+    const ex = keep[p.id];
+    if (!ex) return p;
+    return { ...p, contactName: ex.contactName || '', contactPhone: ex.contactPhone || '', contactEmail: ex.contactEmail || '', activityLog: ex.activityLog || [] };
+  });
+}
 
 // ── Confirmations ─────────────────────────────────────────────
 function getConfirmations()       { return state.confirmations; }
@@ -105,7 +119,7 @@ function getSnapshot() {
 }
 
 module.exports = {
-  getProjects, getProject, addProject, updateProject, deleteProject, setProjects,
+  getProjects, getProject, addProject, updateProject, addActivityLog, deleteProject, setProjects,
   getConfirmations, getConfirmation, addConfirmation, updateConfirmation, deleteConfirmation,
   getLeaderProjects, getLeaderProject, addLeaderProject, updateLeaderProject, deleteLeaderProject,
   getAlerts, addAlert, clearAlert,

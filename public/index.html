@@ -138,6 +138,50 @@
   footer { border-top:1px solid var(--border); padding:9px 28px; display:flex; justify-content:space-between; align-items:center; background:var(--surface); }
   .footer-text { font-family:var(--mono); font-size:9px; color:var(--text-dim); letter-spacing:0.08em; }
 
+  /* ── Contact Info ───────────────────────────────────────── */
+  .pc-contact { display:flex; gap:16px; flex-wrap:wrap; padding:7px 0; border-top:1px solid var(--border); }
+  .pc-contact-item { display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:10px; color:var(--text-mid); }
+  .pc-contact-item a { color:var(--text-mid); text-decoration:none; }
+  .pc-contact-item a:hover { color:var(--gold); }
+  .pc-contact-lbl { color:var(--text-dim); font-size:9px; text-transform:uppercase; letter-spacing:0.1em; }
+
+  /* ── Activity Log ────────────────────────────────────────── */
+  .pc-log { border-top:1px solid var(--border); display:flex; flex-direction:column; gap:0; }
+  .pc-log-entries { display:flex; flex-direction:column; gap:0; max-height:120px; overflow-y:auto; }
+  .pc-log-entries::-webkit-scrollbar { width:2px; }
+  .pc-log-entries::-webkit-scrollbar-thumb { background:var(--border); }
+  .pc-log-entry { padding:5px 0; border-bottom:1px solid rgba(46,44,30,0.6); display:flex; gap:8px; align-items:baseline; }
+  .pc-log-entry:last-child { border-bottom:none; }
+  .pc-log-ts { font-family:var(--mono); font-size:9px; color:var(--text-dim); white-space:nowrap; }
+  .pc-log-text { font-size:11px; color:var(--text-mid); line-height:1.4; }
+  .pc-log-add { display:flex; gap:6px; padding-top:7px; }
+  .pc-log-input { flex:1; background:var(--bg); border:1px solid var(--border); color:var(--text); font-family:var(--mono); font-size:11px; padding:5px 8px; outline:none; }
+  .pc-log-input:focus { border-color:var(--gold-dim); }
+  .pc-log-btn { background:none; border:1px solid var(--gold-dim); color:var(--gold); font-family:var(--mono); font-size:10px; padding:5px 10px; cursor:pointer; white-space:nowrap; transition:all 0.2s; }
+  .pc-log-btn:hover { background:var(--gold); color:var(--bg); }
+
+  /* ── Mobile ──────────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    header { padding:10px 14px; }
+    .logo-name { font-size:16px; }
+    .logo-sub { display:none; }
+    .live-clock { display:none; }
+    .stat-bar { overflow-x:auto; flex-wrap:nowrap; }
+    .stat { min-width:80px; padding:10px 14px; }
+    .stat-value { font-size:18px; }
+    .tab-bar { padding:0 14px; }
+    main { grid-template-columns:1fr; }
+    #auctionStrip { padding:8px 14px; }
+    .panel-header { padding:14px 14px 10px; }
+    .panel-body { padding:10px 14px; }
+    .lp-filter { padding:8px 14px; }
+    .lp-body { padding:10px 14px; }
+    .lp-panel-header { padding:14px 14px 10px; }
+    .lp-leader-section { padding:0; }
+    .modal-inner { padding:18px 14px; }
+    footer { padding:8px 14px; flex-direction:column; gap:4px; align-items:flex-start; }
+  }
+
   /* ── Upcoming Auction Strip ─────────────────────────────── */
   #auctionStrip { display:none; padding:10px 24px; background:rgba(249,115,22,0.07); border-bottom:1px solid rgba(249,115,22,0.25); gap:8px; flex-wrap:wrap; align-items:center; }
   #auctionStrip.visible { display:flex; }
@@ -322,6 +366,11 @@
           </div>
         </div>
         <div class="form-group"><label>Notes</label><input id="pNotes" placeholder="Any relevant notes…" /></div>
+        <div class="form-row">
+          <div class="form-group"><label>Contact Name</label><input id="pContactName" placeholder="Jane Smith" /></div>
+          <div class="form-group"><label>Phone</label><input id="pContactPhone" placeholder="(555) 000-0000" /></div>
+          <div class="form-group"><label>Email</label><input id="pContactEmail" placeholder="jane@client.com" /></div>
+        </div>
         <div class="form-actions">
           <button class="btn-secondary" onclick="toggleForm('addProject')">Cancel</button>
           <button class="btn-primary" onclick="submitProject()">Add Project</button>
@@ -524,7 +573,16 @@ function renderProjects() {
   const el = document.getElementById('projectList');
   const p  = state.projects || [];
   if (!p.length) { el.innerHTML = emptyState('📋', 'No active projects.'); return; }
-  el.innerHTML = p.map(proj => `
+  el.innerHTML = p.map(proj => {
+    const contact = [
+      proj.contactName  ? `<span class="pc-contact-item"><span class="pc-contact-lbl">Contact</span> ${esc(proj.contactName)}</span>` : '',
+      proj.contactPhone ? `<span class="pc-contact-item"><span class="pc-contact-lbl">Ph</span> <a href="tel:${esc(proj.contactPhone)}">${esc(proj.contactPhone)}</a></span>` : '',
+      proj.contactEmail ? `<span class="pc-contact-item"><span class="pc-contact-lbl">Email</span> <a href="mailto:${esc(proj.contactEmail)}">${esc(proj.contactEmail)}</a></span>` : '',
+    ].filter(Boolean).join('');
+    const log = (proj.activityLog || []).slice(0, 5).map(e =>
+      `<div class="pc-log-entry"><span class="pc-log-ts">${new Date(e.ts).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span><span class="pc-log-text">${esc(e.text)}</span></div>`
+    ).join('');
+    return `
     <div class="project-card" id="pc-${proj.id}">
       <div class="pc-top">
         <div>
@@ -534,6 +592,7 @@ function renderProjects() {
         <span class="status-badge ${proj.status}">${statusLabel(proj.status)}</span>
       </div>
       ${proj.notes ? `<div class="project-notes">${esc(proj.notes)}</div>` : ''}
+      ${contact ? `<div class="pc-contact">${contact}</div>` : ''}
       <div class="pc-actions">
         <select class="status-select" onchange="patchProject('${proj.id}', {status:this.value})">
           <option value="on-track"        ${proj.status==='on-track'?'selected':''}>On Track</option>
@@ -545,7 +604,15 @@ function renderProjects() {
         <button class="del-btn" onclick="deleteProject('${proj.id}')">✕</button>
       </div>
       ${proj.summaryText ? `<div class="ai-summary visible">${esc(proj.summaryText)}</div>` : ''}
-    </div>`).join('');
+      <div class="pc-log">
+        ${log ? `<div class="pc-log-entries">${log}</div>` : ''}
+        <div class="pc-log-add">
+          <input class="pc-log-input" id="log-${proj.id}" placeholder="Add update…" onkeydown="if(event.key==='Enter')submitLog('${proj.id}')" />
+          <button class="pc-log-btn" onclick="submitLog('${proj.id}')">Log</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function renderEmails() {
@@ -617,11 +684,25 @@ async function submitProject() {
       name, location: document.getElementById('pLoc').value.trim(),
       date: document.getElementById('pDate').value,
       status: document.getElementById('pStatus').value,
-      notes: document.getElementById('pNotes').value.trim()
+      notes: document.getElementById('pNotes').value.trim(),
+      contactName:  document.getElementById('pContactName').value.trim(),
+      contactPhone: document.getElementById('pContactPhone').value.trim(),
+      contactEmail: document.getElementById('pContactEmail').value.trim()
     })
   });
   toggleForm('addProject');
-  ['pName','pLoc','pDate','pNotes'].forEach(id => document.getElementById(id).value='');
+  ['pName','pLoc','pDate','pNotes','pContactName','pContactPhone','pContactEmail'].forEach(id => document.getElementById(id).value='');
+}
+
+async function submitLog(projectId) {
+  const input = document.getElementById(`log-${projectId}`);
+  const text  = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  await fetch(`/api/projects/${projectId}/log`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ text })
+  });
 }
 
 async function submitEmail() {
