@@ -52,7 +52,14 @@ function daysBefore(n) {
 
 let broadcast;
 let stageMap  = {};
-let ownerMap  = {}; // { hubspotOwnerId: fullName }
+let ownerMap  = {
+  '1613587974': 'Darren Estes',
+  '76302559':   'Blake Johnson',
+  '84584840':   'Luciana Castillo',
+  '84584819':   'Kenny Weaver',
+  '84107196':   'Warner Martinez',
+  '89024581':   'Karen Kester'
+};
 
 // ── Build HubSpot stage map ───────────────────────────────────
 async function buildStageMap() {
@@ -78,47 +85,11 @@ async function buildStageMap() {
 }
 
 // ── Build HubSpot owner map (id → full name) ─────────────────
-async function buildOwnerMap() {
-  const hsKey = process.env.HUBSPOT_API_KEY;
-  if (!hsKey) return;
-
-  // Try v2 legacy endpoint first (needs fewer scopes than v3)
-  const endpoints = [
-    `${HUBSPOT_API}/owners/v2/owners`,
-    `${HUBSPOT_API}/crm/v3/owners?limit=100`
-  ];
-
-  for (const url of endpoints) {
-    try {
-      const res  = await fetch(url, { headers: { Authorization: `Bearer ${hsKey}` } });
-      console.log(`[DEBUG] buildOwnerMap ${url} → ${res.status}`);
-      if (!res.ok) continue;
-      const data = await res.json();
-      const list = data.results || data; // v2 returns array, v3 returns {results:[]}
-      if (!Array.isArray(list) || !list.length) continue;
-      ownerMap = {};
-      list.forEach(owner => {
-        const name = [owner.firstName, owner.lastName].filter(Boolean).join(' ');
-        if (owner.ownerId)  ownerMap[String(owner.ownerId)]  = name;
-        if (owner.id)       ownerMap[String(owner.id)]       = name;
-        if (owner.userId)   ownerMap[String(owner.userId)]   = name;
-      });
-      console.log('[TASK] Owner map built:', JSON.stringify(ownerMap));
-      return;
-    } catch (e) {
-      console.error('[TASK] Owner map error:', e.message);
-    }
-  }
-  console.warn('[TASK] Owner map: all endpoints failed — using hardcoded fallback');
-}
 
 // ── Leader Projects sync (called from HubSpot sync) ──────────
-async function syncLeaderProjects(deals) {
+function syncLeaderProjects(deals) {
   const APRIL_1 = '2026-04-01';
   const today   = new Date().toISOString().slice(0, 10);
-
-  // Always refresh owner map before processing — ensures it's populated
-  await buildOwnerMap();
 
   // Log all property keys on the first deal to reveal correct field names
   if (deals.length > 0) {
@@ -250,7 +221,7 @@ async function runHubSpotSync() {
     console.log(`[DEBUG] Deals after active-stage filter: ${projects.length} of ${deals.length}`);
 
     setProjects(projects);
-    await syncLeaderProjects(deals);
+    syncLeaderProjects(deals);
     addAlert({ type:'sync', message:`🔄 HubSpot sync — ${projects.length} active deals at ${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}` });
     console.log(`[TASK] HubSpot: ${projects.length} projects loaded`);
     if (broadcast) broadcast();
@@ -352,7 +323,6 @@ async function runAIStatusScan() {
 async function init(broadcastFn) {
   broadcast = broadcastFn;
   await buildStageMap();
-  await buildOwnerMap();
 
   // Set TZ=America/New_York in Railway vars for 8am ET
   cron.schedule('0 8 * * *',   () => runHubSpotSync());
