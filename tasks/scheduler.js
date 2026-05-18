@@ -51,8 +51,9 @@ function daysBefore(n) {
 }
 
 let broadcast;
-let stageMap  = {};
-let ownerMap  = {}; // project_leader is a dropdown enum, not an owner ID — not mappable
+let stageMap    = {};
+let ownerMap    = {}; // ownerId (string) → full name
+let leaderEnums = {}; // project_leader enum value → label
 
 // ── Build HubSpot stage map ───────────────────────────────────
 async function buildStageMap() {
@@ -78,6 +79,41 @@ async function buildStageMap() {
 }
 
 // ── Build HubSpot owner map (id → full name) ─────────────────
+async function buildOwnerMap() {
+  const hsKey = process.env.HUBSPOT_API_KEY;
+  if (!hsKey) return;
+  try {
+    const res  = await fetch(`${HUBSPOT_API}/crm/v3/owners?limit=100`, {
+      headers: { Authorization: `Bearer ${hsKey}` }
+    });
+    const data = await res.json();
+    (data.results || []).forEach(o => {
+      const name = [o.firstName, o.lastName].filter(Boolean).join(' ');
+      ownerMap[String(o.id)] = name;
+    });
+    console.log(`[TASK] Owner map: ${Object.keys(ownerMap).length} owners —`, JSON.stringify(ownerMap));
+  } catch (e) {
+    console.error('[TASK] Owner map error:', e.message);
+  }
+}
+
+// ── Build project_leader enum option map (value → label) ─────
+async function buildLeaderEnums() {
+  const hsKey = process.env.HUBSPOT_API_KEY;
+  if (!hsKey) return;
+  try {
+    const res  = await fetch(`${HUBSPOT_API}/crm/v3/properties/deals/project_leader`, {
+      headers: { Authorization: `Bearer ${hsKey}` }
+    });
+    const data = await res.json();
+    (data.options || []).forEach(opt => {
+      leaderEnums[String(opt.value)] = opt.label;
+    });
+    console.log(`[TASK] Leader enum map: ${Object.keys(leaderEnums).length} options —`, JSON.stringify(leaderEnums));
+  } catch (e) {
+    console.error('[TASK] Leader enum error:', e.message);
+  }
+}
 
 // ── Leader Projects sync (called from HubSpot sync) ──────────
 function syncLeaderProjects(deals) {
@@ -107,11 +143,12 @@ function syncLeaderProjects(deals) {
     const title      = jobMatch ? jobMatch[2].trim() : (p.dealname || 'Unnamed');
     const projectNumber = jobMatch ? jobMatch[1] : '';
 
-    // Resolve project_leader: may be a numeric owner ID or a text name
-    const rawLeader  = p.project_leader || p.project_lead || p.deal_project_leader ||
-                       p.project_manager || p.project_leader_name || '';
-    const namedLeader = ownerMap[rawLeader] || rawLeader;
-    const hsLeader    = normalizeLeader(namedLeader);
+    // Resolve project_leader: try enum label, then owner ID lookup, then raw text
+    const rawLeader   = p.project_leader || '';
+    const enumLabel   = leaderEnums[rawLeader] || '';
+    const ownerName   = ownerMap[String(p.hubspot_owner_id || '')] || '';
+    const hsLeader    = normalizeLeader(enumLabel) || normalizeLeader(ownerName) || normalizeLeader(rawLeader);
+    console.log(`[DEBUG] Deal ${deal.id} leader resolution: raw="${rawLeader}" enumLabel="${enumLabel}" ownerName="${ownerName}" → "${hsLeader}"`);
 
     const match = existing.find(e => e.hubspotId === String(deal.id));
     if (match) {
@@ -139,7 +176,7 @@ async function runHubSpotSync() {
 
   const requestBody = {
     limit: 200,
-    properties: ['dealname','dealstage','pipeline','closedate','createdate','description','amount','project_leader'],
+    properties: ['dealname','dealstage','pipeline','closedate','createdate','description','amount','project_leader','hubspot_owner_id'],
     sorts: [{ propertyName: 'closedate', direction: 'ASCENDING' }],
     filterGroups: [{ filters: [{ propertyName: 'dealstage', operator: 'NOT_IN', values: EXCLUDED_STAGE_IDS }] }]
   };
@@ -308,6 +345,8 @@ async function runAIStatusScan() {
 async function init(broadcastFn) {
   broadcast = broadcastFn;
   await buildStageMap();
+  await buildOwnerMap();
+  await buildLeaderEnums();
 
   // Set TZ=America/New_York in Railway vars for 8am ET
   cron.schedule('0 8 * * *',   () => runHubSpotSync());
