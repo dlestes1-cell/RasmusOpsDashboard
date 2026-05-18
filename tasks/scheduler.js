@@ -143,12 +143,13 @@ function syncLeaderProjects(deals) {
     const title      = jobMatch ? jobMatch[2].trim() : (p.dealname || 'Unnamed');
     const projectNumber = jobMatch ? jobMatch[1] : '';
 
-    // Resolve project_leader: try enum label, then owner ID lookup, then raw text
-    const rawLeader   = p.project_leader || '';
-    const enumLabel   = leaderEnums[rawLeader] || '';
-    const ownerName   = ownerMap[String(p.hubspot_owner_id || '')] || '';
-    const hsLeader    = normalizeLeader(enumLabel) || normalizeLeader(ownerName) || normalizeLeader(rawLeader);
-    console.log(`[DEBUG] Deal ${deal.id} leader resolution: raw="${rawLeader}" enumLabel="${enumLabel}" ownerName="${ownerName}" → "${hsLeader}"`);
+    // Resolve project_leader: try it as an owner ID, then enum label, then hubspot_owner_id, then raw text
+    const rawLeader      = p.project_leader || '';
+    const ownerFromPL    = ownerMap[rawLeader] || '';
+    const enumLabel      = leaderEnums[rawLeader] || '';
+    const ownerFromDeal  = ownerMap[String(p.hubspot_owner_id || '')] || '';
+    const hsLeader       = normalizeLeader(ownerFromPL) || normalizeLeader(enumLabel) || normalizeLeader(ownerFromDeal) || normalizeLeader(rawLeader);
+    console.log(`[DEBUG] Deal ${deal.id} leader resolution: raw="${rawLeader}" ownerFromPL="${ownerFromPL}" enumLabel="${enumLabel}" ownerFromDeal="${ownerFromDeal}" → "${hsLeader}"`);
 
     const match = existing.find(e => e.hubspotId === String(deal.id));
     if (match) {
