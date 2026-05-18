@@ -220,33 +220,38 @@ app.post('/api/sync/trigger', async (req, res) => {
   }
 });
 
-// ── HubSpot raw debug — shows actual property names/values ────
+// ── HubSpot raw debug — find the project leader property name ─
 app.get('/api/sync/debug', async (req, res) => {
   const hsKey = process.env.HUBSPOT_API_KEY;
   if (!hsKey) return res.status(503).json({ error: 'No HUBSPOT_API_KEY' });
   try {
-    const today = new Date().toISOString().slice(0, 10);
-    const r = await fetch('https://api.hubapi.com/crm/v3/objects/deals/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hsKey}` },
-      body: JSON.stringify({
-        limit: 10,
-        properties: ['dealname','dealstage','closedate','createdate','project_leader','hubspot_owner_id','hs_all_owner_ids'],
-        sorts: [{ propertyName: 'closedate', direction: 'ASCENDING' }],
-        filterGroups: [{ filters: [{ propertyName: 'closedate', operator: 'GTE', value: '2026-04-01' }] }]
-      })
+    // 1. List all custom deal properties, find anything matching "leader" or "project"
+    const propsRes = await fetch('https://api.hubapi.com/crm/v3/properties/deals', {
+      headers: { Authorization: `Bearer ${hsKey}` }
     });
-    const data = await r.json();
-    const deals = (data.results || []).map(d => ({
-      id: d.id,
-      dealname: d.properties.dealname,
-      closedate: d.properties.closedate,
-      createdate: d.properties.createdate,
-      project_leader_raw: d.properties.project_leader,
-      hubspot_owner_id: d.properties.hubspot_owner_id,
-      past_removal: d.properties.closedate ? d.properties.closedate.split('T')[0] < today : 'no closedate'
-    }));
-    res.json({ today, total: data.total, deals });
+    const propsData = await propsRes.json();
+    const allProps = (propsData.results || []);
+    const leaderProps = allProps.filter(p =>
+      p.label.toLowerCase().includes('leader') ||
+      p.label.toLowerCase().includes('project') ||
+      p.name.toLowerCase().includes('leader') ||
+      p.name.toLowerCase().includes('project')
+    ).map(p => ({ name: p.name, label: p.label, type: p.type }));
+
+    // 2. Fetch one deal with ALL its properties to see raw values
+    const dealRes = await fetch('https://api.hubapi.com/crm/v3/objects/deals?limit=1&properties=' +
+      allProps.map(p => p.name).join(','), {
+      headers: { Authorization: `Bearer ${hsKey}` }
+    });
+    const dealData = await dealRes.json();
+    const sampleDeal = dealData.results?.[0] || null;
+    const filledProps = sampleDeal
+      ? Object.entries(sampleDeal.properties)
+          .filter(([, v]) => v !== null && v !== '')
+          .reduce((acc, [k, v]) => { acc[k] = v; return acc; }, {})
+      : {};
+
+    res.json({ leaderProps, sampleDealId: sampleDeal?.id, filledProps });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
