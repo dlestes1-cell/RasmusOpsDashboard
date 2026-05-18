@@ -228,6 +228,32 @@ app.post('/api/sync/trigger', async (req, res) => {
   }
 });
 
+// ── HubSpot contact scope test ───────────────────────────────
+app.get('/api/sync/test-contact', async (req, res) => {
+  const hsKey = process.env.HUBSPOT_API_KEY;
+  if (!hsKey) return res.status(503).json({ error: 'No HUBSPOT_API_KEY' });
+  try {
+    // Get associations for a known deal
+    const dealId = '59560761184'; // Unionville Brewing
+    const assocRes = await fetch(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}/associations/contacts`, {
+      headers: { Authorization: `Bearer ${hsKey}` }
+    });
+    const assocData = await assocRes.json();
+    const contactIds = (assocData.results || []).map(r => r.id);
+    if (!contactIds.length) return res.json({ contactIds: [], contacts: [] });
+
+    const batchRes = await fetch('https://api.hubapi.com/crm/v3/objects/contacts/batch/read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hsKey}` },
+      body: JSON.stringify({ inputs: contactIds.map(id => ({ id })), properties: ['firstname','lastname','phone','mobilephone','email'] })
+    });
+    const batchData = await batchRes.json();
+    res.json({ contactIds, status: batchRes.status, contacts: batchData.results || [], error: batchData.message });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── HubSpot pipelines list ────────────────────────────────────
 app.get('/api/sync/pipelines', async (req, res) => {
   const hsKey = process.env.HUBSPOT_API_KEY;
