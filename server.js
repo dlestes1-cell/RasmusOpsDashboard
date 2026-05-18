@@ -218,6 +218,16 @@ The email should confirm project/auction completion, thank them, note next steps
   }
 });
 
+// ── Manual digest trigger ─────────────────────────────────────
+app.post('/api/digest/trigger', async (req, res) => {
+  try {
+    await scheduler.runDailyDigest();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Manual sync trigger ───────────────────────────────────────
 app.post('/api/sync/trigger', async (req, res) => {
   try {

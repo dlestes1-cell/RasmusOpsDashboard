@@ -42,4 +42,21 @@ async function searchMessages(query, maxResults = 5) {
   return data.messages || [];
 }
 
-module.exports = { getAccessToken, searchMessages };
+async function sendEmail(to, subject, htmlBody) {
+  const token = await getAccessToken();
+  if (!token) { console.log('[GMAIL] No token — cannot send email'); return false; }
+  const raw = btoa(
+    `To: ${to}\r\nSubject: ${subject}\r\nContent-Type: text/html; charset=utf-8\r\n\r\n${htmlBody}`
+  ).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  const res = await fetch(`${GMAIL_API}/users/me/messages/send`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ raw })
+  });
+  const data = await res.json();
+  if (data.id) { console.log(`[GMAIL] Sent to ${to}: ${subject}`); return true; }
+  console.error('[GMAIL] Send failed:', JSON.stringify(data));
+  return false;
+}
+
+module.exports = { getAccessToken, searchMessages, sendEmail };

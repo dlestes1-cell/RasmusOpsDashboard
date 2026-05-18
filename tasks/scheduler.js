@@ -1,6 +1,6 @@
 // tasks/scheduler.js — HubSpot + Gmail integrated
 const cron  = require('node-cron');
-const gmail = require('./gmail');
+const gmail  = require('./gmail');
 const {
   getConfirmations, updateConfirmation, addAlert,
   getProjects, updateProject, setProjects,
@@ -59,6 +59,9 @@ function daysBefore(n) {
   return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
 }
 
+// Leader display name → email (pulled from HubSpot owner data at startup)
+const LEADER_EMAILS = {};
+
 let broadcast;
 let stageMap    = {};
 let ownerMap    = {}; // ownerId (string) → full name
@@ -99,8 +102,11 @@ async function buildOwnerMap() {
     (data.results || []).forEach(o => {
       const name = [o.firstName, o.lastName].filter(Boolean).join(' ');
       ownerMap[String(o.id)] = name;
+      const normalized = normalizeLeader(name);
+      if (normalized && o.email) LEADER_EMAILS[normalized] = o.email;
     });
     console.log(`[TASK] Owner map: ${Object.keys(ownerMap).length} owners —`, JSON.stringify(ownerMap));
+    console.log(`[TASK] Leader emails:`, JSON.stringify(LEADER_EMAILS));
   } catch (e) {
     console.error('[TASK] Owner map error:', e.message);
   }
@@ -400,6 +406,66 @@ async function runAIStatusScan() {
   if (broadcast) broadcast();
 }
 
+// ── TASK 5: Daily digest — 8:10 AM ───────────────────────────
+async function runDailyDigest() {
+  const hasGmail = process.env.GMAIL_REFRESH_TOKEN && process.env.GMAIL_CLIENT_ID;
+  if (!hasGmail) { console.log('[DIGEST] No Gmail credentials — skipping'); return; }
+
+  const today     = new Date().toISOString().slice(0, 10);
+  const dateLabel = new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
+  const projects  = getProjects();
+  const leaders   = getLeaderProjects();
+  const confs     = getConfirmations();
+
+  const overdue   = confs.filter(c => !c.sent && (Date.now() - c.completedAt) >= WINDOW_MS);
+  const thisWeek  = projects.filter(p => p.date && p.date >= today && p.date <= new Date(Date.now() + 7*864e5).toISOString().slice(0,10));
+
+  const sentTo = new Set();
+
+  // Per-leader digest
+  for (const leader of KNOWN_LEADERS) {
+    const email = LEADER_EMAILS[leader];
+    if (!email) { console.log(`[DIGEST] No email for ${leader} — skipping`); continue; }
+
+    const myJobs = leaders.filter(p => p.leader === leader && (!p.removalDate || p.removalDate >= today));
+    const myAtRisk = projects.filter(p => (p.status === 'at-risk' || p.status === 'needs-attention'));
+
+    const jobRows = myJobs.length
+      ? myJobs.map(j => `<tr><td style="padding:6px 12px 6px 0;font-family:monospace;font-size:12px;color:#666">${j.projectNumber||''}</td><td style="padding:6px 12px 6px 0;font-size:13px">${j.title}</td><td style="padding:6px 0;font-family:monospace;font-size:11px;color:#999">${j.removalDate||'—'}</td></tr>`).join('')
+      : '<tr><td colspan="3" style="padding:8px 0;color:#999;font-size:12px">No active jobs assigned</td></tr>';
+
+    const upcomingRows = thisWeek.length
+      ? thisWeek.map(p => `<tr><td style="padding:4px 12px 4px 0;font-family:monospace;font-size:12px;color:#666">${p.jobNumber||''}</td><td style="padding:4px 12px 4px 0;font-size:12px">${p.name}</td><td style="padding:4px 0;font-family:monospace;font-size:11px;color:#e07020;font-weight:600">${p.date}</td></tr>`).join('')
+      : '<tr><td colspan="3" style="padding:4px 0;color:#999;font-size:12px">No auctions this week</td></tr>';
+
+    const overdueSection = overdue.length
+      ? `<h3 style="font-family:monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#c84b4b;margin:24px 0 8px">⚠ Overdue Confirmations (${overdue.length})</h3>
+         <ul style="margin:0;padding:0 0 0 18px">${overdue.map(c=>`<li style="font-size:12px;margin-bottom:4px">${c.site}${c.recipient?' — '+c.recipient:''}</li>`).join('')}</ul>` : '';
+
+    const html = `<!DOCTYPE html><html><body style="background:#f9f8f5;margin:0;padding:24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a">
+<div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid #e5e3db;padding:28px">
+  <p style="font-family:monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.15em;color:#999;margin:0 0 4px">Rasmus Auctions · Field Operations</p>
+  <h1 style="font-size:22px;font-weight:700;margin:0 0 2px">${dateLabel}</h1>
+  <p style="color:#666;font-size:13px;margin:0 0 24px">Good morning, ${leader.split(' ')[0]}.</p>
+
+  <h3 style="font-family:monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#888;margin:0 0 8px">Your Active Jobs</h3>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:24px">${jobRows}</table>
+
+  <h3 style="font-family:monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#888;margin:0 0 8px">⚑ Auctions This Week</h3>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:24px">${upcomingRows}</table>
+
+  ${overdueSection}
+
+  <p style="margin:24px 0 0;font-size:11px;color:#aaa;font-family:monospace">Rasmus Field Operations Dashboard · Auto-generated at 8:10 AM</p>
+</div></body></html>`;
+
+    await gmail.sendEmail(email, `Field Ops Digest — ${dateLabel}`, html);
+    sentTo.add(leader);
+  }
+
+  console.log(`[DIGEST] Sent to ${sentTo.size} leaders: ${[...sentTo].join(', ')}`);
+}
+
 // ── Init ──────────────────────────────────────────────────────
 async function init(broadcastFn) {
   broadcast = broadcastFn;
@@ -410,6 +476,7 @@ async function init(broadcastFn) {
   // Set TZ=America/New_York in Railway vars for 8am ET
   cron.schedule('0 8 * * *',   () => runHubSpotSync());
   cron.schedule('5 8 * * *',   () => runGmailSync());
+  cron.schedule('10 8 * * *',  () => runDailyDigest());
   cron.schedule('*/5 * * * *', () => runConfirmationCheck());
   cron.schedule('0 */6 * * *', () => runAIStatusScan());
 
@@ -420,4 +487,4 @@ async function init(broadcastFn) {
   console.log('[CRON] All tasks active.');
 }
 
-module.exports = { init, runHubSpotSync };
+module.exports = { init, runHubSpotSync, runDailyDigest };
