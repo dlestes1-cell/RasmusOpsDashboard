@@ -224,6 +224,7 @@ app.post('/api/digest/trigger', async (req, res) => {
     await scheduler.runDailyDigest();
     res.json({ ok: true });
   } catch (e) {
+    console.error('[DIGEST] Error:', e.message, e.stack);
     res.status(500).json({ error: e.message });
   }
 });
