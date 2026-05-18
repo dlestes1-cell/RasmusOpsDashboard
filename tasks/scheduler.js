@@ -3,7 +3,8 @@ const cron  = require('node-cron');
 const gmail = require('./gmail');
 const {
   getConfirmations, updateConfirmation, addAlert,
-  getProjects, updateProject, setProjects
+  getProjects, updateProject, setProjects,
+  getLeaderProjects, addLeaderProject, updateLeaderProject, deleteLeaderProject
 } = require('../state');
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
@@ -60,6 +61,46 @@ async function buildStageMap() {
   }
 }
 
+// ── Leader Projects sync (called from HubSpot sync) ──────────
+function syncLeaderProjects(deals) {
+  const APRIL_1 = '2026-04-01';
+  const today   = new Date().toISOString().slice(0, 10);
+
+  const qualifying = deals.filter(deal => {
+    const cd = deal.properties.closedate;
+    if (!cd) return false;
+    const dateStr = cd.split('T')[0];
+    return dateStr >= APRIL_1 && dateStr >= today;
+  });
+
+  const existing = getLeaderProjects();
+
+  qualifying.forEach(deal => {
+    const p          = deal.properties;
+    const closeDate  = p.closedate  ? p.closedate.split('T')[0]  : '';
+    const createDate = p.createdate ? p.createdate.split('T')[0] : APRIL_1;
+    const startDate  = createDate < APRIL_1 ? APRIL_1 : createDate;
+    const jobMatch   = (p.dealname || '').match(/^(R\d+)\s+(.*)/i);
+    const title      = jobMatch ? jobMatch[2].trim() : (p.dealname || 'Unnamed');
+    const projectNumber = jobMatch ? jobMatch[1] : '';
+
+    const match = existing.find(e => e.hubspotId === String(deal.id));
+    if (match) {
+      updateLeaderProject(match.id, { projectNumber, title, startDate, removalDate: closeDate });
+    } else {
+      addLeaderProject({ projectNumber, title, leader: '', startDate, removalDate: closeDate, hubspotId: String(deal.id) });
+    }
+  });
+
+  // Remove HubSpot-sourced entries that no longer qualify (expired or removed)
+  const qualifyingIds = new Set(qualifying.map(d => String(d.id)));
+  existing
+    .filter(e => e.hubspotId && !qualifyingIds.has(e.hubspotId))
+    .forEach(e => deleteLeaderProject(e.id));
+
+  console.log(`[TASK] Leader board synced: ${qualifying.length} qualifying deals (closedate >= ${APRIL_1} and >= today)`);
+}
+
 // ── TASK 1: HubSpot sync — 8:00 AM ───────────────────────────
 async function runHubSpotSync() {
   const hsKey = process.env.HUBSPOT_API_KEY;
@@ -68,7 +109,7 @@ async function runHubSpotSync() {
 
   const requestBody = {
     limit: 200,
-    properties: ['dealname','dealstage','pipeline','closedate','description','amount'],
+    properties: ['dealname','dealstage','pipeline','closedate','createdate','description','amount'],
     sorts: [{ propertyName: 'closedate', direction: 'ASCENDING' }],
     filterGroups: [{ filters: [{ propertyName: 'dealstage', operator: 'NOT_IN', values: EXCLUDED_STAGE_IDS }] }]
   };
@@ -135,6 +176,7 @@ async function runHubSpotSync() {
     console.log(`[DEBUG] Deals after active-stage filter: ${projects.length} of ${deals.length}`);
 
     setProjects(projects);
+    syncLeaderProjects(deals);
     addAlert({ type:'sync', message:`🔄 HubSpot sync — ${projects.length} active deals at ${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}` });
     console.log(`[TASK] HubSpot: ${projects.length} projects loaded`);
     if (broadcast) broadcast();
