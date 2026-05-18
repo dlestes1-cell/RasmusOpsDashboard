@@ -210,6 +210,16 @@ The email should confirm project/auction completion, thank them, note next steps
   }
 });
 
+// ── Manual sync trigger (dev/test only) ───────────────────────
+app.post('/api/sync/trigger', async (req, res) => {
+  try {
+    await scheduler.runHubSpotSync();
+    res.json({ ok: true, leaderProjects: state.getLeaderProjects() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Start ─────────────────────────────────────────────────────
 scheduler.init(broadcast);
 

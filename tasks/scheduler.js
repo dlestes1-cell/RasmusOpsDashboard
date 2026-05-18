@@ -312,4 +312,4 @@ async function init(broadcastFn) {
   console.log('[CRON] All tasks active.');
 }
 
-module.exports = { init };
+module.exports = { init, runHubSpotSync };
