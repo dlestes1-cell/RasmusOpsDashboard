@@ -52,14 +52,7 @@ function daysBefore(n) {
 
 let broadcast;
 let stageMap  = {};
-let ownerMap  = {
-  '1613587974': 'Darren Estes',
-  '76302559':   'Blake Johnson',
-  '84584840':   'Luciana Castillo',
-  '84584819':   'Kenny Weaver',
-  '84107196':   'Warner Martinez',
-  '89024581':   'Karen Kester'
-};
+let ownerMap  = {}; // project_leader is a dropdown enum, not an owner ID — not mappable
 
 // ── Build HubSpot stage map ───────────────────────────────────
 async function buildStageMap() {
@@ -91,13 +84,6 @@ function syncLeaderProjects(deals) {
   const APRIL_1 = '2026-04-01';
   const today   = new Date().toISOString().slice(0, 10);
 
-  // Log all property keys on the first deal to reveal correct field names
-  if (deals.length > 0) {
-    const keys = Object.keys(deals[0].properties);
-    console.log(`[DEBUG] Deal property keys available: ${keys.join(', ')}`);
-    console.log(`[DEBUG] First deal raw properties:`, JSON.stringify(deals[0].properties, null, 2));
-  }
-
   // Include all deals with closedate >= April 1 (past-dated ones are hidden
   // on the frontend; only truly expired deals get removed from the board)
   const qualifying = deals.filter(deal => {
@@ -126,7 +112,6 @@ function syncLeaderProjects(deals) {
                        p.project_manager || p.project_leader_name || '';
     const namedLeader = ownerMap[rawLeader] || rawLeader;
     const hsLeader    = normalizeLeader(namedLeader);
-    console.log(`[DEBUG] Deal ${deal.id} "${p.dealname}" | raw: "${rawLeader}" | name: "${namedLeader}" | resolved: "${hsLeader}"`);
 
     const match = existing.find(e => e.hubspotId === String(deal.id));
     if (match) {
