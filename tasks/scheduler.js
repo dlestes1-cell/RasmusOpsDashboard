@@ -81,24 +81,35 @@ async function buildStageMap() {
 async function buildOwnerMap() {
   const hsKey = process.env.HUBSPOT_API_KEY;
   if (!hsKey) return;
-  try {
-    const res  = await fetch(`${HUBSPOT_API}/crm/v3/owners?limit=100`, {
-      headers: { Authorization: `Bearer ${hsKey}` }
-    });
-    console.log('[DEBUG] buildOwnerMap status:', res.status);
-    const raw  = await res.text();
-    console.log('[DEBUG] buildOwnerMap raw:', raw.slice(0, 500));
-    const data = JSON.parse(raw);
-    ownerMap   = {}; // reset before repopulating
-    (data.results || []).forEach(owner => {
-      const name = [owner.firstName, owner.lastName].filter(Boolean).join(' ');
-      ownerMap[String(owner.id)]     = name;
-      ownerMap[String(owner.userId)] = name;
-    });
-    console.log('[TASK] Owner map built:', JSON.stringify(ownerMap));
-  } catch (e) {
-    console.error('[TASK] Owner map error:', e.message, e.stack);
+
+  // Try v2 legacy endpoint first (needs fewer scopes than v3)
+  const endpoints = [
+    `${HUBSPOT_API}/owners/v2/owners`,
+    `${HUBSPOT_API}/crm/v3/owners?limit=100`
+  ];
+
+  for (const url of endpoints) {
+    try {
+      const res  = await fetch(url, { headers: { Authorization: `Bearer ${hsKey}` } });
+      console.log(`[DEBUG] buildOwnerMap ${url} → ${res.status}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const list = data.results || data; // v2 returns array, v3 returns {results:[]}
+      if (!Array.isArray(list) || !list.length) continue;
+      ownerMap = {};
+      list.forEach(owner => {
+        const name = [owner.firstName, owner.lastName].filter(Boolean).join(' ');
+        if (owner.ownerId)  ownerMap[String(owner.ownerId)]  = name;
+        if (owner.id)       ownerMap[String(owner.id)]       = name;
+        if (owner.userId)   ownerMap[String(owner.userId)]   = name;
+      });
+      console.log('[TASK] Owner map built:', JSON.stringify(ownerMap));
+      return;
+    } catch (e) {
+      console.error('[TASK] Owner map error:', e.message);
+    }
   }
+  console.warn('[TASK] Owner map: all endpoints failed — using hardcoded fallback');
 }
 
 // ── Leader Projects sync (called from HubSpot sync) ──────────
