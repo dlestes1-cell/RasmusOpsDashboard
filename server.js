@@ -210,11 +210,43 @@ The email should confirm project/auction completion, thank them, note next steps
   }
 });
 
-// ── Manual sync trigger (dev/test only) ───────────────────────
+// ── Manual sync trigger ───────────────────────────────────────
 app.post('/api/sync/trigger', async (req, res) => {
   try {
     await scheduler.runHubSpotSync();
     res.json({ ok: true, leaderProjects: state.getLeaderProjects() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── HubSpot raw debug — shows actual property names/values ────
+app.get('/api/sync/debug', async (req, res) => {
+  const hsKey = process.env.HUBSPOT_API_KEY;
+  if (!hsKey) return res.status(503).json({ error: 'No HUBSPOT_API_KEY' });
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const r = await fetch('https://api.hubapi.com/crm/v3/objects/deals/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hsKey}` },
+      body: JSON.stringify({
+        limit: 10,
+        properties: ['dealname','dealstage','closedate','createdate','project_leader','hubspot_owner_id','hs_all_owner_ids'],
+        sorts: [{ propertyName: 'closedate', direction: 'ASCENDING' }],
+        filterGroups: [{ filters: [{ propertyName: 'closedate', operator: 'GTE', value: '2026-04-01' }] }]
+      })
+    });
+    const data = await r.json();
+    const deals = (data.results || []).map(d => ({
+      id: d.id,
+      dealname: d.properties.dealname,
+      closedate: d.properties.closedate,
+      createdate: d.properties.createdate,
+      project_leader_raw: d.properties.project_leader,
+      hubspot_owner_id: d.properties.hubspot_owner_id,
+      past_removal: d.properties.closedate ? d.properties.closedate.split('T')[0] < today : 'no closedate'
+    }));
+    res.json({ today, total: data.total, deals });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
