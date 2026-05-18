@@ -138,6 +138,15 @@
   footer { border-top:1px solid var(--border); padding:9px 28px; display:flex; justify-content:space-between; align-items:center; background:var(--surface); }
   .footer-text { font-family:var(--mono); font-size:9px; color:var(--text-dim); letter-spacing:0.08em; }
 
+  /* ── Upcoming Auction Strip ─────────────────────────────── */
+  #auctionStrip { display:none; padding:10px 24px; background:rgba(249,115,22,0.07); border-bottom:1px solid rgba(249,115,22,0.25); gap:8px; flex-wrap:wrap; align-items:center; }
+  #auctionStrip.visible { display:flex; }
+  .auction-strip-label { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.12em; color:#f97316; margin-right:4px; white-space:nowrap; }
+  .auction-pill { font-family:var(--mono); font-size:10px; padding:4px 10px; border:1px solid rgba(249,115,22,0.35); color:var(--text-mid); background:rgba(249,115,22,0.06); white-space:nowrap; }
+  .auction-pill .pill-days { color:#f97316; font-weight:600; margin-left:6px; }
+  .auction-pill.today { border-color:rgba(239,68,68,0.5); background:rgba(239,68,68,0.08); color:var(--text); }
+  .auction-pill.today .pill-days { color:#ef4444; }
+
   /* ── Tabs ───────────────────────────────────────────────── */
   .tab-bar { display:flex; background:var(--surface); border-bottom:1px solid var(--border); padding:0 24px; gap:2px; }
   .tab-btn { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.12em; padding:11px 20px; cursor:pointer; background:none; border:none; color:var(--text-dim); border-bottom:2px solid transparent; transition:all 0.2s; }
@@ -280,6 +289,11 @@
 <div class="tab-bar">
   <button class="tab-btn active" id="tabOps" onclick="switchTab('ops')">Field Operations</button>
   <button class="tab-btn" id="tabLeaders" onclick="switchTab('leaders')">Project Leaders</button>
+</div>
+
+<div id="auctionStrip">
+  <span class="auction-strip-label">⚑ This Week</span>
+  <div id="auctionPills" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
 </div>
 
 <main id="opsPane">
@@ -452,6 +466,7 @@ setInterval(tick, 1000); tick();
 function render() {
   renderStats();
   renderAlerts();
+  renderAuctionStrip();
   renderProjects();
   renderEmails();
   renderLeaderProjects();
@@ -480,6 +495,29 @@ function renderAlerts() {
       <span>${esc(a.message)}</span>
       <button class="alert-dismiss" onclick="dismissAlert('${a.id}')">✕</button>
     </div>`).join('');
+}
+
+function renderAuctionStrip() {
+  const strip = document.getElementById('auctionStrip');
+  const pills = document.getElementById('auctionPills');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const in7   = new Date(today); in7.setDate(today.getDate() + 7);
+
+  const upcoming = (state.projects || [])
+    .filter(p => p.date)
+    .map(p => ({ ...p, _d: new Date(p.date + 'T00:00:00') }))
+    .filter(p => p._d >= today && p._d <= in7)
+    .sort((a,b) => a._d - b._d);
+
+  if (!upcoming.length) { strip.classList.remove('visible'); return; }
+  strip.classList.add('visible');
+
+  pills.innerHTML = upcoming.map(p => {
+    const diff  = Math.round((p._d - today) / 864e5);
+    const label = diff === 0 ? 'TODAY' : diff === 1 ? 'TOMORROW' : `${diff}d`;
+    const cls   = diff === 0 ? 'today' : '';
+    return `<div class="auction-pill ${cls}">${esc(p.jobNumber ? p.jobNumber+' '+p.name : p.name)}<span class="pill-days">${label}</span></div>`;
+  }).join('');
 }
 
 function renderProjects() {
