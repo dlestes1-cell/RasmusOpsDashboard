@@ -115,7 +115,7 @@ function syncLeaderProjects(deals) {
 
     const match = existing.find(e => e.hubspotId === String(deal.id));
     if (match) {
-      const leader = hsLeader || match.leader;
+      const leader = hsLeader || (match.manualLeader ? match.leader : '');
       updateLeaderProject(match.id, { projectNumber, title, startDate, removalDate: closeDate, leader });
     } else {
       addLeaderProject({ projectNumber, title, leader: hsLeader, startDate, removalDate: closeDate, hubspotId: String(deal.id) });

@@ -722,9 +722,10 @@ async function saveEditLeader() {
     body: JSON.stringify({
       projectNumber: document.getElementById('editLpNum').value.trim(),
       title,
-      leader:      document.getElementById('editLpLeader').value,
-      startDate:   start,
-      removalDate: document.getElementById('editLpEnd').value
+      leader:       document.getElementById('editLpLeader').value,
+      startDate:    start,
+      removalDate:  document.getElementById('editLpEnd').value,
+      manualLeader: true
     })
   });
   closeEditLeader();
