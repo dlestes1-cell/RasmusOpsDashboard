@@ -85,21 +85,29 @@ async function buildOwnerMap() {
     const res  = await fetch(`${HUBSPOT_API}/crm/v3/owners?limit=100`, {
       headers: { Authorization: `Bearer ${hsKey}` }
     });
-    const data = await res.json();
+    console.log('[DEBUG] buildOwnerMap status:', res.status);
+    const raw  = await res.text();
+    console.log('[DEBUG] buildOwnerMap raw:', raw.slice(0, 500));
+    const data = JSON.parse(raw);
+    ownerMap   = {}; // reset before repopulating
     (data.results || []).forEach(owner => {
       const name = [owner.firstName, owner.lastName].filter(Boolean).join(' ');
-      ownerMap[String(owner.id)] = name;
+      ownerMap[String(owner.id)]     = name;
+      ownerMap[String(owner.userId)] = name;
     });
-    console.log('[TASK] Owner map:', JSON.stringify(ownerMap));
+    console.log('[TASK] Owner map built:', JSON.stringify(ownerMap));
   } catch (e) {
-    console.error('[TASK] Owner map error:', e.message);
+    console.error('[TASK] Owner map error:', e.message, e.stack);
   }
 }
 
 // ── Leader Projects sync (called from HubSpot sync) ──────────
-function syncLeaderProjects(deals) {
+async function syncLeaderProjects(deals) {
   const APRIL_1 = '2026-04-01';
   const today   = new Date().toISOString().slice(0, 10);
+
+  // Always refresh owner map before processing — ensures it's populated
+  await buildOwnerMap();
 
   // Log all property keys on the first deal to reveal correct field names
   if (deals.length > 0) {
@@ -231,7 +239,7 @@ async function runHubSpotSync() {
     console.log(`[DEBUG] Deals after active-stage filter: ${projects.length} of ${deals.length}`);
 
     setProjects(projects);
-    syncLeaderProjects(deals);
+    await syncLeaderProjects(deals);
     addAlert({ type:'sync', message:`🔄 HubSpot sync — ${projects.length} active deals at ${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}` });
     console.log(`[TASK] HubSpot: ${projects.length} projects loaded`);
     if (broadcast) broadcast();
