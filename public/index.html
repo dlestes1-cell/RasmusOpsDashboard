@@ -763,6 +763,7 @@ function renderLeaderProjects() {
 
   const active = (state.leaderProjects || []).filter(p => {
     if (p.startDate && p.startDate < '2026-04-01') return false;
+    if (p.removalDate && p.removalDate < today) return false;
     return true;
   });
 
