@@ -230,10 +230,13 @@ async function runHubSpotSync() {
       console.log('[DEBUG] EXCLUDED_STAGE_IDS:', JSON.stringify(EXCLUDED_STAGE_IDS));
     }
 
+    const today    = new Date().toISOString().slice(0, 10);
     const projects = deals.map(deal => {
       const p     = deal.properties;
       const stage = stageMap[p.dealstage] || p.dealstage || 'Unknown';
       const stageMatches = ACTIVE_STAGE_LABELS.some(l => stage.toLowerCase().includes(l.toLowerCase()));
+      const closeDate = p.closedate ? p.closedate.split('T')[0] : '';
+      if (closeDate && closeDate < today) return null;
       console.log(`[DEBUG] Deal ${deal.id} | dealstage ID: "${p.dealstage}" | resolved stage: "${stage}" | closedate: "${p.closedate}" | name: "${p.dealname}" | stage matches active list: ${stageMatches}`);
       if (!stageMatches) return null;
       const jobMatch = (p.dealname || '').match(/^(R\d+)\s+(.*)/i);
@@ -243,7 +246,7 @@ async function runHubSpotSync() {
         jobNumber:   jobMatch ? jobMatch[1] : '',
         name:        jobMatch ? jobMatch[2].trim() : (p.dealname || 'Unnamed'),
         location:    '',
-        date:        p.closedate ? p.closedate.split('T')[0] : '',
+        date:        closeDate,
         status:      stageToStatus(stage),
         stage,
         notes:       p.description || '',
