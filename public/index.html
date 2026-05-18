@@ -160,6 +160,19 @@
   .pc-log-btn { background:none; border:1px solid var(--gold-dim); color:var(--gold); font-family:var(--mono); font-size:10px; padding:5px 10px; cursor:pointer; white-space:nowrap; transition:all 0.2s; }
   .pc-log-btn:hover { background:var(--gold); color:var(--bg); }
 
+  /* ── Search / Filter Bar ────────────────────────────────── */
+  .search-bar { padding:8px 24px; border-bottom:1px solid var(--border); display:flex; gap:8px; align-items:center; background:var(--surface); }
+  .search-input { flex:1; background:var(--bg); border:1px solid var(--border); color:var(--text); font-family:var(--mono); font-size:11px; padding:6px 10px; outline:none; }
+  .search-input:focus { border-color:var(--gold-dim); }
+  .search-input::placeholder { color:var(--text-dim); }
+  .filter-chips { display:flex; gap:5px; flex-shrink:0; }
+  .fchip { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.1em; padding:4px 9px; cursor:pointer; background:none; border:1px solid var(--border); color:var(--text-dim); transition:all 0.15s; white-space:nowrap; }
+  .fchip:hover { border-color:var(--gold-dim); color:var(--text-mid); }
+  .fchip.active { border-color:var(--gold); color:var(--gold); background:rgba(200,168,75,0.08); }
+  .fchip.at-risk.active   { border-color:var(--amber); color:var(--amber); background:rgba(200,148,75,0.08); }
+  .fchip.needs.active     { border-color:var(--red);   color:var(--red);   background:rgba(200,75,75,0.08); }
+  .no-results { text-align:center; padding:30px 20px; color:var(--text-dim); font-family:var(--mono); font-size:11px; }
+
   /* ── Mobile ──────────────────────────────────────────────── */
   @media (max-width: 768px) {
     header { padding:10px 14px; }
@@ -346,6 +359,15 @@
     <div class="panel-header">
       <div class="panel-title"><span class="dot"></span> Active Projects</div>
       <button class="add-btn" onclick="toggleForm('addProject')">+ Add Project</button>
+    </div>
+    <div class="search-bar">
+      <input class="search-input" id="projectSearch" placeholder="Search job #, name, stage…" oninput="renderProjects()" />
+      <div class="filter-chips">
+        <button class="fchip active" data-filter="all"       onclick="setProjectFilter('all')">All</button>
+        <button class="fchip"        data-filter="on-track"  onclick="setProjectFilter('on-track')">On Track</button>
+        <button class="fchip at-risk" data-filter="at-risk"  onclick="setProjectFilter('at-risk')">At Risk</button>
+        <button class="fchip needs"  data-filter="needs-attention" onclick="setProjectFilter('needs-attention')">Needs Attn</button>
+      </div>
     </div>
     <div class="panel-body">
       <div class="add-form" id="addProject">
@@ -569,9 +591,27 @@ function renderAuctionStrip() {
   }).join('');
 }
 
+let projectFilter = 'all';
+function setProjectFilter(f) {
+  projectFilter = f;
+  document.querySelectorAll('.fchip').forEach(c => c.classList.toggle('active', c.dataset.filter === f));
+  renderProjects();
+}
+
 function renderProjects() {
-  const el = document.getElementById('projectList');
-  const p  = state.projects || [];
+  const el    = document.getElementById('projectList');
+  const query = (document.getElementById('projectSearch')?.value || '').toLowerCase().trim();
+  let p = state.projects || [];
+
+  if (projectFilter !== 'all') p = p.filter(x => x.status === projectFilter);
+  if (query) p = p.filter(x =>
+    (x.jobNumber || '').toLowerCase().includes(query) ||
+    (x.name      || '').toLowerCase().includes(query) ||
+    (x.stage     || '').toLowerCase().includes(query) ||
+    (x.contactName || '').toLowerCase().includes(query)
+  );
+
+  if (!p.length && (state.projects||[]).length) { el.innerHTML = '<div class="no-results">No matching projects.</div>'; return; }
   if (!p.length) { el.innerHTML = emptyState('📋', 'No active projects.'); return; }
   el.innerHTML = p.map(proj => {
     const contact = [
