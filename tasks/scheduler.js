@@ -230,6 +230,42 @@ async function runHubSpotSync() {
       console.log('[DEBUG] EXCLUDED_STAGE_IDS:', JSON.stringify(EXCLUDED_STAGE_IDS));
     }
 
+    // ── Fetch contact info for all deals in one batch ─────────
+    const contactMap = {};
+    try {
+      const assocResults = await Promise.all(
+        deals.map(deal =>
+          fetch(`${HUBSPOT_API}/crm/v3/objects/deals/${deal.id}/associations/contacts`, {
+            headers: { Authorization: `Bearer ${hsKey}` }
+          }).then(r => r.json()).then(d => ({ dealId: deal.id, contactIds: (d.results||[]).map(r=>r.id) }))
+        )
+      );
+      const allContactIds = [...new Set(assocResults.flatMap(r => r.contactIds))];
+      if (allContactIds.length) {
+        const batchRes  = await fetch(`${HUBSPOT_API}/crm/v3/objects/contacts/batch/read`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hsKey}` },
+          body: JSON.stringify({ inputs: allContactIds.map(id => ({ id })), properties: ['firstname','lastname','phone','mobilephone','email'] })
+        });
+        const batchData = await batchRes.json();
+        const contactById = {};
+        (batchData.results || []).forEach(c => {
+          const p = c.properties;
+          contactById[c.id] = {
+            contactName:  [p.firstname, p.lastname].filter(Boolean).join(' '),
+            contactPhone: p.phone || p.mobilephone || '',
+            contactEmail: p.email || ''
+          };
+        });
+        assocResults.forEach(({ dealId, contactIds }) => {
+          if (contactIds[0]) contactMap[dealId] = contactById[contactIds[0]] || {};
+        });
+      }
+      console.log(`[TASK] Contacts fetched for ${Object.keys(contactMap).length} deals`);
+    } catch (e) {
+      console.error('[TASK] Contact fetch error:', e.message);
+    }
+
     const today    = new Date().toISOString().slice(0, 10);
     const projects = deals.map(deal => {
       const p     = deal.properties;
@@ -240,19 +276,23 @@ async function runHubSpotSync() {
       console.log(`[DEBUG] Deal ${deal.id} | dealstage ID: "${p.dealstage}" | resolved stage: "${stage}" | closedate: "${p.closedate}" | name: "${p.dealname}" | stage matches active list: ${stageMatches}`);
       if (!stageMatches) return null;
       const jobMatch = (p.dealname || '').match(/^(R\d+)\s+(.*)/i);
+      const contact  = contactMap[deal.id] || {};
       return {
-        id:          String(deal.id),
-        hubspotId:   String(deal.id),
-        jobNumber:   jobMatch ? jobMatch[1] : '',
-        name:        jobMatch ? jobMatch[2].trim() : (p.dealname || 'Unnamed'),
-        location:    '',
-        date:        closeDate,
-        status:      stageToStatus(stage),
+        id:           String(deal.id),
+        hubspotId:    String(deal.id),
+        jobNumber:    jobMatch ? jobMatch[1] : '',
+        name:         jobMatch ? jobMatch[2].trim() : (p.dealname || 'Unnamed'),
+        location:     '',
+        date:         closeDate,
+        status:       stageToStatus(stage),
         stage,
-        notes:       p.description || '',
-        summaryText: '',
-        amount:      p.amount || '',
-        createdAt:   Date.now()
+        notes:        p.description || '',
+        summaryText:  '',
+        amount:       p.amount || '',
+        contactName:  contact.contactName  || '',
+        contactPhone: contact.contactPhone || '',
+        contactEmail: contact.contactEmail || '',
+        createdAt:    Date.now()
       };
     }).filter(Boolean);
 

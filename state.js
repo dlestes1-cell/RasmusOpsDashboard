@@ -75,7 +75,7 @@ function setProjects(incoming) {
   state.projects = incoming.map(p => {
     const ex = keep[p.id];
     if (!ex) return p;
-    return { ...p, contactName: ex.contactName || '', contactPhone: ex.contactPhone || '', contactEmail: ex.contactEmail || '', activityLog: ex.activityLog || [] };
+    return { ...p, contactName: p.contactName || ex.contactName || '', contactPhone: p.contactPhone || ex.contactPhone || '', contactEmail: p.contactEmail || ex.contactEmail || '', activityLog: ex.activityLog || [] };
   });
 }
 
