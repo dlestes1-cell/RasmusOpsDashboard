@@ -137,6 +137,57 @@
   /* Footer */
   footer { border-top:1px solid var(--border); padding:9px 28px; display:flex; justify-content:space-between; align-items:center; background:var(--surface); }
   .footer-text { font-family:var(--mono); font-size:9px; color:var(--text-dim); letter-spacing:0.08em; }
+
+  /* ── Tabs ───────────────────────────────────────────────── */
+  .tab-bar { display:flex; background:var(--surface); border-bottom:1px solid var(--border); padding:0 24px; gap:2px; }
+  .tab-btn { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.12em; padding:11px 20px; cursor:pointer; background:none; border:none; color:var(--text-dim); border-bottom:2px solid transparent; transition:all 0.2s; }
+  .tab-btn:hover { color:var(--text-mid); }
+  .tab-btn.active { color:#f97316; border-bottom-color:#f97316; }
+
+  /* ── Leader Pane ─────────────────────────────────────────── */
+  #leaderPane { display:none; flex-direction:column; flex:1; }
+  #leaderPane.visible { display:flex; }
+  .lp-panel { background:var(--surface); display:flex; flex-direction:column; flex:1; }
+  .lp-panel-header { padding:18px 24px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; background:var(--surface); }
+  .lp-filter { padding:10px 24px; border-bottom:1px solid var(--border); display:flex; gap:6px; flex-wrap:wrap; background:var(--surface); }
+  .lp-chip { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.1em; padding:5px 11px; cursor:pointer; background:none; border:1px solid var(--border); color:var(--text-dim); transition:all 0.2s; }
+  .lp-chip:hover { border-color:var(--gold-dim); color:var(--text-mid); }
+  .lp-chip.sel { border-color:#f97316; color:#f97316; background:rgba(249,115,22,0.08); }
+  .lp-body { flex:1; overflow-y:auto; padding:14px 24px; display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:10px; align-content:start; }
+  .lp-body::-webkit-scrollbar { width:3px; }
+  .lp-body::-webkit-scrollbar-thumb { background:var(--border); }
+  .lp-empty { grid-column:1/-1; text-align:center; padding:40px 20px; color:var(--text-dim); font-family:var(--mono); font-size:11px; letter-spacing:0.05em; }
+  .lp-empty .icon { font-size:28px; margin-bottom:10px; opacity:.4; }
+
+  /* ── Leader Project Cards ────────────────────────────────── */
+  .lp-card { border:1px solid var(--border); background:var(--surface2); overflow:hidden; transition:border-color 0.2s; }
+  .lp-card:hover { border-color:var(--gold-dim); }
+  .lp-status-strip { height:4px; }
+  .lp-status-strip.active    { background:var(--green); box-shadow:0 0 10px rgba(75,200,122,0.5); animation:pulse 2.5s ease-in-out infinite; }
+  .lp-status-strip.scheduled { background:var(--amber); }
+  .lp-card-inner { padding:14px 16px; display:flex; flex-direction:column; gap:11px; }
+  .lp-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .lp-proj-num { font-family:var(--mono); font-size:9px; color:var(--text-dim); letter-spacing:0.1em; margin-bottom:3px; }
+  .lp-proj-title { font-size:13px; font-weight:600; color:var(--text); }
+  .lp-proj-leader { font-family:var(--mono); font-size:10px; color:var(--text-mid); margin-top:4px; }
+  .lp-badge { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.12em; padding:4px 9px; border-radius:2px; white-space:nowrap; }
+  .lp-badge.active    { background:rgba(75,200,122,.1); color:var(--green); border:1px solid rgba(75,200,122,.3); }
+  .lp-badge.scheduled { background:rgba(200,148,75,.1); color:var(--amber); border:1px solid rgba(200,148,75,.3); }
+  .lp-dates { display:flex; gap:20px; flex-wrap:wrap; }
+  .lp-date-item { display:flex; flex-direction:column; gap:2px; }
+  .lp-date-label { font-family:var(--mono); font-size:9px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em; }
+  .lp-date-val { font-family:var(--mono); font-size:11px; color:var(--text-mid); }
+  .lp-timeline { display:flex; flex-direction:column; gap:5px; }
+  .lp-tl-track { height:5px; background:var(--bg); border-radius:3px; overflow:hidden; position:relative; }
+  .lp-tl-fill { height:100%; border-radius:3px; transition:width 0.5s ease; min-width:3px; }
+  .lp-tl-fill.active    { background:var(--green); }
+  .lp-tl-fill.scheduled { background:var(--amber); }
+  .lp-tl-labels { display:flex; justify-content:space-between; font-family:var(--mono); font-size:9px; color:var(--text-dim); }
+  .lp-card-actions { display:flex; justify-content:flex-end; }
+
+  /* Add form for leader projects */
+  #addLeaderProject { display:none; background:var(--surface2); border:1px solid var(--gold-dim); padding:16px; flex-direction:column; gap:10px; animation:fadein 0.2s ease; margin:14px 24px 0; }
+  #addLeaderProject.open { display:flex; }
 </style>
 </head>
 <body>
@@ -183,7 +234,13 @@
   <div class="stat"><div class="stat-label">Overdue</div><div class="stat-value red" id="sOverdue">—</div></div>
 </div>
 
-<main>
+<!-- Tab bar -->
+<div class="tab-bar">
+  <button class="tab-btn active" id="tabOps" onclick="switchTab('ops')">Field Operations</button>
+  <button class="tab-btn" id="tabLeaders" onclick="switchTab('leaders')">Project Leaders</button>
+</div>
+
+<main id="opsPane">
   <!-- Projects -->
   <div class="panel">
     <div class="panel-header">
@@ -244,6 +301,57 @@
   </div>
 </main>
 
+<!-- Project Leaders Pane -->
+<div id="leaderPane">
+  <div class="lp-panel">
+    <div class="lp-panel-header">
+      <div class="panel-title"><span class="dot" style="background:#f97316;box-shadow:0 0 6px rgba(249,115,22,.5)"></span> Project Leaders Board</div>
+      <button class="add-btn" onclick="toggleLeaderForm()">+ Add Project</button>
+    </div>
+
+    <!-- Add form -->
+    <div class="add-form" id="addLeaderProject" style="margin:14px 24px 0;display:none;">
+      <div class="form-row">
+        <div class="form-group" style="max-width:140px"><label>Project #</label><input id="lpNum" placeholder="2026-001" /></div>
+        <div class="form-group"><label>Project Title</label><input id="lpTitle" placeholder="Heritage Farm Estate Auction" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Project Leader</label>
+          <select id="lpLeader">
+            <option value="">— Select leader —</option>
+            <option>Karen Kester</option>
+            <option>Kenny Weaver</option>
+            <option>Luciana Castillo</option>
+            <option>Darren Estes</option>
+            <option>Blake Johnson</option>
+            <option>Warner Martinez</option>
+          </select>
+        </div>
+        <div class="form-group" style="max-width:150px"><label>Start Date</label><input type="date" id="lpStart" min="2026-04-01" /></div>
+        <div class="form-group" style="max-width:150px"><label>Removal Date</label><input type="date" id="lpEnd" /></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-secondary" onclick="toggleLeaderForm()">Cancel</button>
+        <button class="btn-primary" onclick="submitLeaderProject()">Add Project</button>
+      </div>
+    </div>
+
+    <!-- Leader filter chips -->
+    <div class="lp-filter">
+      <button class="lp-chip sel" data-leader="all" onclick="setLpFilter('all')">All</button>
+      <button class="lp-chip" data-leader="Karen Kester"     onclick="setLpFilter('Karen Kester')">Karen Kester</button>
+      <button class="lp-chip" data-leader="Kenny Weaver"     onclick="setLpFilter('Kenny Weaver')">Kenny Weaver</button>
+      <button class="lp-chip" data-leader="Luciana Castillo" onclick="setLpFilter('Luciana Castillo')">Luciana Castillo</button>
+      <button class="lp-chip" data-leader="Darren Estes"     onclick="setLpFilter('Darren Estes')">Darren Estes</button>
+      <button class="lp-chip" data-leader="Blake Johnson"    onclick="setLpFilter('Blake Johnson')">Blake Johnson</button>
+      <button class="lp-chip" data-leader="Warner Martinez"  onclick="setLpFilter('Warner Martinez')">Warner Martinez</button>
+    </div>
+
+    <div class="lp-body" id="leaderProjectList"></div>
+  </div>
+</div>
+
 <footer>
   <div class="footer-text">Rasmus Auctions · Field Operations Dashboard · Railway</div>
   <div class="footer-text" id="lastSync">Waiting for server…</div>
@@ -253,7 +361,7 @@
 // ── WebSocket connection ───────────────────────────────────────
 const proto = location.protocol === 'https:' ? 'wss' : 'ws';
 let ws, reconnectTimer;
-let state = { projects: [], confirmations: [], alerts: [] };
+let state = { projects: [], confirmations: [], alerts: [], leaderProjects: [] };
 let currentDraftText = '';
 
 function connect() {
@@ -304,6 +412,7 @@ function render() {
   renderAlerts();
   renderProjects();
   renderEmails();
+  renderLeaderProjects();
 }
 
 function renderStats() {
@@ -477,6 +586,161 @@ function copyDraft() {
     const btn = document.querySelector('.modal-inner .btn-primary');
     btn.textContent='Copied!'; setTimeout(()=>btn.textContent='Copy to Clipboard',2000);
   });
+}
+
+// ── Tab switching ─────────────────────────────────────────────
+function switchTab(tab) {
+  const ops     = document.getElementById('opsPane');
+  const leaders = document.getElementById('leaderPane');
+  const btnOps  = document.getElementById('tabOps');
+  const btnLdr  = document.getElementById('tabLeaders');
+  if (tab === 'ops') {
+    ops.style.display = '';
+    leaders.classList.remove('visible');
+    btnOps.classList.add('active');
+    btnLdr.classList.remove('active');
+  } else {
+    ops.style.display = 'none';
+    leaders.classList.add('visible');
+    btnLdr.classList.add('active');
+    btnOps.classList.remove('active');
+  }
+}
+
+// ── Leader Projects ───────────────────────────────────────────
+let lpFilter = 'all';
+
+function setLpFilter(leader) {
+  lpFilter = leader;
+  document.querySelectorAll('.lp-chip').forEach(el => {
+    el.classList.toggle('sel', el.dataset.leader === leader);
+  });
+  renderLeaderProjects();
+}
+
+function toggleLeaderForm() {
+  const f = document.getElementById('addLeaderProject');
+  const isOpen = f.classList.contains('open');
+  f.classList.toggle('open');
+  f.style.display = isOpen ? 'none' : 'flex';
+}
+
+async function submitLeaderProject() {
+  const title  = document.getElementById('lpTitle').value.trim();
+  const leader = document.getElementById('lpLeader').value;
+  const start  = document.getElementById('lpStart').value;
+  if (!title)  return alert('Project title required.');
+  if (!leader) return alert('Please select a project leader.');
+  if (!start)  return alert('Start date required.');
+  if (start < '2026-04-01') return alert('Start date must be April 1, 2026 or later.');
+  const end = document.getElementById('lpEnd').value;
+  if (!end)    return alert('Removal date required.');
+  await fetch('/api/leader-projects', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      projectNumber: document.getElementById('lpNum').value.trim(),
+      title, leader, startDate: start, removalDate: end
+    })
+  });
+  toggleLeaderForm();
+  ['lpNum','lpTitle','lpStart','lpEnd'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('lpLeader').value = '';
+}
+
+async function deleteLeaderProject(id) {
+  await fetch(`/api/leader-projects/${id}`, { method: 'DELETE' });
+}
+
+function lpIsActive(p, today) {
+  return p.startDate && p.removalDate && p.startDate <= today && p.removalDate >= today;
+}
+
+function lpProgress(startDate, removalDate) {
+  const s = new Date(startDate).getTime();
+  const e = new Date(removalDate).getTime();
+  const n = Date.now();
+  if (n <= s) return 0;
+  if (n >= e) return 100;
+  return Math.round((n - s) / (e - s) * 100);
+}
+
+function fmtDateShort(iso) {
+  if (!iso) return '—';
+  const [y, m, d] = iso.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[+m-1]} ${+d}, ${y}`;
+}
+
+function renderLeaderProjects() {
+  const el    = document.getElementById('leaderProjectList');
+  if (!el) return;
+  const today = new Date().toISOString().slice(0, 10);
+
+  let projects = (state.leaderProjects || []).filter(p => {
+    if (p.startDate && p.startDate < '2026-04-01') return false;
+    if (p.removalDate && p.removalDate < today) return false;  // auto-expire
+    return true;
+  });
+
+  if (lpFilter !== 'all') {
+    projects = projects.filter(p => p.leader === lpFilter);
+  }
+
+  projects.sort((a, b) => {
+    const aA = lpIsActive(a, today) ? 0 : 1;
+    const bA = lpIsActive(b, today) ? 0 : 1;
+    if (aA !== bA) return aA - bA;
+    return (a.startDate || '').localeCompare(b.startDate || '');
+  });
+
+  if (!projects.length) {
+    el.innerHTML = `<div class="lp-empty"><div class="icon">📋</div>No active projects for this selection.<br><span style="opacity:.6">Use "+ Add Project" above to add one.</span></div>`;
+    return;
+  }
+
+  el.innerHTML = projects.map(p => {
+    const active  = lpIsActive(p, today);
+    const cls     = active ? 'active' : 'scheduled';
+    const label   = active ? 'Active' : 'Scheduled';
+    const pct     = active ? lpProgress(p.startDate, p.removalDate) : 0;
+    return `
+    <div class="lp-card" id="lpc-${p.id}">
+      <div class="lp-status-strip ${cls}"></div>
+      <div class="lp-card-inner">
+        <div class="lp-card-top">
+          <div>
+            ${p.projectNumber ? `<div class="lp-proj-num"># ${esc(p.projectNumber)}</div>` : ''}
+            <div class="lp-proj-title">${esc(p.title)}</div>
+            <div class="lp-proj-leader">↳ ${esc(p.leader)}</div>
+          </div>
+          <span class="lp-badge ${cls}">${label}</span>
+        </div>
+        <div class="lp-dates">
+          <div class="lp-date-item">
+            <div class="lp-date-label">Start Date</div>
+            <div class="lp-date-val">${fmtDateShort(p.startDate)}</div>
+          </div>
+          <div class="lp-date-item">
+            <div class="lp-date-label">Removal Date</div>
+            <div class="lp-date-val">${fmtDateShort(p.removalDate)}</div>
+          </div>
+        </div>
+        <div class="lp-timeline">
+          <div class="lp-tl-track">
+            <div class="lp-tl-fill ${cls}" style="width:${pct}%"></div>
+          </div>
+          <div class="lp-tl-labels">
+            <span>${fmtDateShort(p.startDate)}</span>
+            <span>${pct}%</span>
+            <span>${fmtDateShort(p.removalDate)}</span>
+          </div>
+        </div>
+        <div class="lp-card-actions">
+          <button class="del-btn" onclick="deleteLeaderProject('${p.id}')">✕ Remove</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ── Helpers ───────────────────────────────────────────────────

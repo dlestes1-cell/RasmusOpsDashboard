@@ -98,6 +98,32 @@ app.delete('/api/alerts/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Leader Projects ───────────────────────────────────────────
+app.get('/api/leader-projects', (req, res) => {
+  res.json(state.getLeaderProjects());
+});
+
+app.post('/api/leader-projects', (req, res) => {
+  const { projectNumber, title, leader, startDate, removalDate } = req.body;
+  if (!title)  return res.status(400).json({ error: 'title required' });
+  if (!leader) return res.status(400).json({ error: 'leader required' });
+  state.addLeaderProject({ projectNumber: projectNumber || '', title, leader, startDate: startDate || '', removalDate: removalDate || '' });
+  broadcast();
+  res.json({ ok: true });
+});
+
+app.patch('/api/leader-projects/:id', (req, res) => {
+  state.updateLeaderProject(req.params.id, req.body);
+  broadcast();
+  res.json({ ok: true });
+});
+
+app.delete('/api/leader-projects/:id', (req, res) => {
+  state.deleteLeaderProject(req.params.id);
+  broadcast();
+  res.json({ ok: true });
+});
+
 // ── AI proxy — keeps API key server-side, never in browser ────
 app.post('/api/ai/summary', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;

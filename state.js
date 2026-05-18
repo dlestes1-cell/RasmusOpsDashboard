@@ -50,7 +50,8 @@ let state = {
       flagged: false, draftText: ''
     }
   ],
-  alerts: []  // { id, type, message, projectId?, confirmationId?, ts }
+  alerts: [],  // { id, type, message, projectId?, confirmationId?, ts }
+  leaderProjects: []  // { id, projectNumber, title, leader, startDate, removalDate, createdAt }
 };
 
 // ── Projects ─────────────────────────────────────────────────
@@ -74,6 +75,16 @@ function updateConfirmation(id, patch) {
 }
 function deleteConfirmation(id)   { state.confirmations = state.confirmations.filter(c => c.id !== id); }
 
+// ── Leader Projects ───────────────────────────────────────────
+function getLeaderProjects()         { return state.leaderProjects; }
+function getLeaderProject(id)        { return state.leaderProjects.find(p => p.id === id); }
+function addLeaderProject(data)      { state.leaderProjects.push({ id: uid(), createdAt: now(), ...data }); }
+function updateLeaderProject(id, patch) {
+  const i = state.leaderProjects.findIndex(p => p.id === id);
+  if (i !== -1) state.leaderProjects[i] = { ...state.leaderProjects[i], ...patch };
+}
+function deleteLeaderProject(id)     { state.leaderProjects = state.leaderProjects.filter(p => p.id !== id); }
+
 // ── Alerts ────────────────────────────────────────────────────
 function getAlerts()    { return state.alerts; }
 function addAlert(alert) {
@@ -85,16 +96,18 @@ function clearAlert(id) { state.alerts = state.alerts.filter(a => a.id !== id); 
 // ── Full snapshot (sent to clients) ───────────────────────────
 function getSnapshot() {
   return {
-    projects:      state.projects,
-    confirmations: state.confirmations,
-    alerts:        state.alerts,
-    serverTime:    now()
+    projects:       state.projects,
+    confirmations:  state.confirmations,
+    alerts:         state.alerts,
+    leaderProjects: state.leaderProjects,
+    serverTime:     now()
   };
 }
 
 module.exports = {
   getProjects, getProject, addProject, updateProject, deleteProject, setProjects,
   getConfirmations, getConfirmation, addConfirmation, updateConfirmation, deleteConfirmation,
+  getLeaderProjects, getLeaderProject, addLeaderProject, updateLeaderProject, deleteLeaderProject,
   getAlerts, addAlert, clearAlert,
   getSnapshot
 };
