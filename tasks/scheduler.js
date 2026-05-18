@@ -188,7 +188,10 @@ async function runHubSpotSync() {
     limit: 200,
     properties: ['dealname','dealstage','pipeline','closedate','createdate','description','amount','project_leader','hubspot_owner_id'],
     sorts: [{ propertyName: 'closedate', direction: 'ASCENDING' }],
-    filterGroups: [{ filters: [{ propertyName: 'dealstage', operator: 'NOT_IN', values: EXCLUDED_STAGE_IDS }] }]
+    filterGroups: [{ filters: [
+      { propertyName: 'pipeline',   operator: 'EQ',     value: '147097136' },
+      { propertyName: 'dealstage',  operator: 'NOT_IN', values: EXCLUDED_STAGE_IDS }
+    ]}]
   };
   console.log('[DEBUG] Request URL:', `${HUBSPOT_API}/crm/v3/objects/deals/search`);
   console.log('[DEBUG] Request body:', JSON.stringify(requestBody, null, 2));
