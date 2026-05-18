@@ -22,6 +22,21 @@ const EXCLUDED_STAGE_IDS = [
   '1044146096','1044046920','1006697529','1006697530','1006750136'
 ];
 
+const KNOWN_LEADERS = [
+  'Karen Kester', 'Kenny Weaver', 'Luciana Castillo',
+  'Darren Estes', 'Blake Johnson', 'Warner Martinez'
+];
+
+function normalizeLeader(raw) {
+  if (!raw) return '';
+  const val = String(raw).toLowerCase().replace(/_/g, ' ').trim();
+  return KNOWN_LEADERS.find(name => {
+    const n = name.toLowerCase();
+    return n === val || n.includes(val) || val.includes(n) ||
+           n.split(' ')[0] === val || n.split(' ')[1] === val;
+  }) || '';
+}
+
 function stageToStatus(label) {
   if (!label) return 'on-track';
   const l = label.toLowerCase();
@@ -84,11 +99,16 @@ function syncLeaderProjects(deals) {
     const title      = jobMatch ? jobMatch[2].trim() : (p.dealname || 'Unnamed');
     const projectNumber = jobMatch ? jobMatch[1] : '';
 
+    const hsLeader = normalizeLeader(p.project_leader);
+    console.log(`[DEBUG] Deal ${deal.id} | project_leader raw: "${p.project_leader}" | resolved: "${hsLeader}"`);
+
     const match = existing.find(e => e.hubspotId === String(deal.id));
     if (match) {
-      updateLeaderProject(match.id, { projectNumber, title, startDate, removalDate: closeDate });
+      // HubSpot leader wins when present; otherwise preserve manual assignment
+      const leader = hsLeader || match.leader;
+      updateLeaderProject(match.id, { projectNumber, title, startDate, removalDate: closeDate, leader });
     } else {
-      addLeaderProject({ projectNumber, title, leader: '', startDate, removalDate: closeDate, hubspotId: String(deal.id) });
+      addLeaderProject({ projectNumber, title, leader: hsLeader, startDate, removalDate: closeDate, hubspotId: String(deal.id) });
     }
   });
 
@@ -109,7 +129,7 @@ async function runHubSpotSync() {
 
   const requestBody = {
     limit: 200,
-    properties: ['dealname','dealstage','pipeline','closedate','createdate','description','amount'],
+    properties: ['dealname','dealstage','pipeline','closedate','createdate','description','amount','project_leader'],
     sorts: [{ propertyName: 'closedate', direction: 'ASCENDING' }],
     filterGroups: [{ filters: [{ propertyName: 'dealstage', operator: 'NOT_IN', values: EXCLUDED_STAGE_IDS }] }]
   };
