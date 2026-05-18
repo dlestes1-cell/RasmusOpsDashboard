@@ -45,9 +45,9 @@ async function searchMessages(query, maxResults = 5) {
 async function sendEmail(to, subject, htmlBody) {
   const token = await getAccessToken();
   if (!token) { console.log('[GMAIL] No token — cannot send email'); return false; }
-  const raw = btoa(
-    `To: ${to}\r\nSubject: ${subject}\r\nContent-Type: text/html; charset=utf-8\r\n\r\n${htmlBody}`
-  ).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  const raw = Buffer.from(
+    `To: ${to}\r\nSubject: ${subject}\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=utf-8\r\n\r\n${htmlBody}`
+  ).toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
   const res = await fetch(`${GMAIL_API}/users/me/messages/send`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
