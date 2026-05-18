@@ -23,16 +23,16 @@ const EXCLUDED_STAGE_IDS = [
 ];
 
 const KNOWN_LEADERS = [
-  'Karen Kester', 'Kenny Weaver', 'Luciana Castillo',
-  'Darren Estes', 'Blake Johnson', 'Warner Martinez'
+  'Karen Kester', 'Kenneth Weaver', 'Luciana Castillo',
+  'Darren Estes', 'Blake Johnson', 'Werner Manrique-Martinez'
 ];
 
-// HubSpot name → display name for cases where they don't match exactly
+// Aliases for name variations that may appear in HubSpot
 const LEADER_ALIASES = {
-  'kenneth weaver':           'Kenny Weaver',
-  'werner manrique-martinez': 'Warner Martinez',
-  'werner martinez':          'Warner Martinez',
-  'warner manrique-martinez': 'Warner Martinez',
+  'kenny weaver':             'Kenneth Weaver',
+  'warner martinez':          'Werner Manrique-Martinez',
+  'werner martinez':          'Werner Manrique-Martinez',
+  'warner manrique-martinez': 'Werner Manrique-Martinez',
 };
 
 function normalizeLeader(raw) {
