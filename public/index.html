@@ -766,38 +766,46 @@ function renderLeaderProjects() {
     return true;
   });
 
-  el.innerHTML = LP_LEADERS.map(leader => {
-    const jobs = active
-      .filter(p => p.leader === leader)
-      .sort((a, b) => {
-        const aA = lpIsActive(a, today) ? 0 : 1;
-        const bA = lpIsActive(b, today) ? 0 : 1;
-        if (aA !== bA) return aA - bA;
-        return (a.startDate || '').localeCompare(b.startDate || '');
-      });
+  const sortJobs = arr => arr.sort((a, b) => {
+    const aA = lpIsActive(a, today) ? 0 : 1;
+    const bA = lpIsActive(b, today) ? 0 : 1;
+    if (aA !== bA) return aA - bA;
+    return (a.startDate || '').localeCompare(b.startDate || '');
+  });
 
-    const countLabel = jobs.length
-      ? `${jobs.length} job${jobs.length > 1 ? 's' : ''}`
-      : 'No active jobs';
-    const countCls = jobs.length ? 'has-jobs' : 'no-jobs';
-
+  const leaderSections = LP_LEADERS.map(leader => {
+    const jobs  = sortJobs(active.filter(p => p.leader === leader));
+    const countLabel = jobs.length ? `${jobs.length} job${jobs.length > 1 ? 's' : ''}` : 'No active jobs';
+    const countCls   = jobs.length ? 'has-jobs' : 'no-jobs';
     const cards = jobs.length
       ? jobs.map(p => lpCard(p, today)).join('')
       : `<div class="lp-leader-none">No active jobs in window</div>`;
-
     const display = lpFilter !== 'all' && lpFilter !== leader ? 'display:none;' : '';
-
     return `
     <div class="lp-leader-section" data-leader="${esc(leader)}" style="${display}">
       <div class="lp-leader-hdr">
         <div class="lp-leader-name">${esc(leader)}</div>
-        <div class="lp-leader-meta">
-          <span class="lp-leader-count ${countCls}">${countLabel}</span>
-        </div>
+        <span class="lp-leader-count ${countCls}">${countLabel}</span>
       </div>
       <div class="lp-leader-body">${cards}</div>
     </div>`;
-  }).join('');
+  });
+
+  // Unassigned: synced jobs with no matched leader — visible during debugging
+  const unassigned = sortJobs(active.filter(p => !p.leader || !LP_LEADERS.includes(p.leader)));
+  if (unassigned.length) {
+    const display = lpFilter !== 'all' ? 'display:none;' : '';
+    leaderSections.push(`
+    <div class="lp-leader-section" data-leader="unassigned" style="${display}">
+      <div class="lp-leader-hdr" style="border-left:3px solid var(--amber);">
+        <div class="lp-leader-name" style="color:var(--amber)">Unassigned (${unassigned.length})</div>
+        <span class="lp-leader-count" style="color:var(--amber);border-color:rgba(200,148,75,.3);">No leader matched</span>
+      </div>
+      <div class="lp-leader-body">${unassigned.map(p => lpCard(p, today)).join('')}</div>
+    </div>`);
+  }
+
+  el.innerHTML = leaderSections.join('');
 }
 
 function lpCard(p, today) {

@@ -81,11 +81,23 @@ function syncLeaderProjects(deals) {
   const APRIL_1 = '2026-04-01';
   const today   = new Date().toISOString().slice(0, 10);
 
+  // Log all property keys on the first deal to reveal correct field names
+  if (deals.length > 0) {
+    const keys = Object.keys(deals[0].properties);
+    console.log(`[DEBUG] Deal property keys available: ${keys.join(', ')}`);
+    console.log(`[DEBUG] First deal raw properties:`, JSON.stringify(deals[0].properties, null, 2));
+  }
+
+  // Include all deals with closedate >= April 1 (past-dated ones are hidden
+  // on the frontend; only truly expired deals get removed from the board)
   const qualifying = deals.filter(deal => {
-    const cd = deal.properties.closedate;
-    if (!cd) return false;
-    const dateStr = cd.split('T')[0];
-    return dateStr >= APRIL_1 && dateStr >= today;
+    const p  = deal.properties;
+    const cd = p.closedate ? p.closedate.split('T')[0] : null;
+    const cr = p.createdate ? p.createdate.split('T')[0] : null;
+    // Accept if closedate is April 1+ OR if no closedate but created April 1+
+    if (cd) return cd >= APRIL_1;
+    if (cr) return cr >= APRIL_1;
+    return false;
   });
 
   const existing = getLeaderProjects();
@@ -99,12 +111,14 @@ function syncLeaderProjects(deals) {
     const title      = jobMatch ? jobMatch[2].trim() : (p.dealname || 'Unnamed');
     const projectNumber = jobMatch ? jobMatch[1] : '';
 
-    const hsLeader = normalizeLeader(p.project_leader);
-    console.log(`[DEBUG] Deal ${deal.id} | project_leader raw: "${p.project_leader}" | resolved: "${hsLeader}"`);
+    // Try every plausible property name for project leader
+    const rawLeader = p.project_leader || p.project_lead || p.deal_project_leader ||
+                      p.project_manager || p.project_leader_name || '';
+    const hsLeader  = normalizeLeader(rawLeader);
+    console.log(`[DEBUG] Deal ${deal.id} "${p.dealname}" | leader raw: "${rawLeader}" | resolved: "${hsLeader}" | closedate: "${closeDate}"`);
 
     const match = existing.find(e => e.hubspotId === String(deal.id));
     if (match) {
-      // HubSpot leader wins when present; otherwise preserve manual assignment
       const leader = hsLeader || match.leader;
       updateLeaderProject(match.id, { projectNumber, title, startDate, removalDate: closeDate, leader });
     } else {
@@ -112,13 +126,13 @@ function syncLeaderProjects(deals) {
     }
   });
 
-  // Remove HubSpot-sourced entries that no longer qualify (expired or removed)
+  // Only remove HubSpot-sourced entries whose closedate has genuinely passed today
   const qualifyingIds = new Set(qualifying.map(d => String(d.id)));
   existing
-    .filter(e => e.hubspotId && !qualifyingIds.has(e.hubspotId))
+    .filter(e => e.hubspotId && !qualifyingIds.has(e.hubspotId) && e.removalDate && e.removalDate < today)
     .forEach(e => deleteLeaderProject(e.id));
 
-  console.log(`[TASK] Leader board synced: ${qualifying.length} qualifying deals (closedate >= ${APRIL_1} and >= today)`);
+  console.log(`[TASK] Leader board synced: ${qualifying.length} qualifying deals`);
 }
 
 // ── TASK 1: HubSpot sync — 8:00 AM ───────────────────────────
