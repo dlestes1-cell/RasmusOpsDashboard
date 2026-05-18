@@ -27,9 +27,18 @@ const KNOWN_LEADERS = [
   'Darren Estes', 'Blake Johnson', 'Warner Martinez'
 ];
 
+// HubSpot name → display name for cases where they don't match exactly
+const LEADER_ALIASES = {
+  'kenneth weaver':           'Kenny Weaver',
+  'werner manrique-martinez': 'Warner Martinez',
+  'werner martinez':          'Warner Martinez',
+  'warner manrique-martinez': 'Warner Martinez',
+};
+
 function normalizeLeader(raw) {
   if (!raw) return '';
   const val = String(raw).toLowerCase().replace(/_/g, ' ').trim();
+  if (LEADER_ALIASES[val]) return LEADER_ALIASES[val];
   return KNOWN_LEADERS.find(name => {
     const n = name.toLowerCase();
     return n === val || n.includes(val) || val.includes(n) ||
