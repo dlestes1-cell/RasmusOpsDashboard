@@ -51,7 +51,8 @@ function daysBefore(n) {
 }
 
 let broadcast;
-let stageMap = {};
+let stageMap  = {};
+let ownerMap  = {}; // { hubspotOwnerId: fullName }
 
 // ── Build HubSpot stage map ───────────────────────────────────
 async function buildStageMap() {
@@ -73,6 +74,25 @@ async function buildStageMap() {
     console.log(`[TASK] Stage map: ${Object.keys(stageMap).length} stages —`, JSON.stringify(stageMap));
   } catch (e) {
     console.error('[TASK] Stage map error:', e.message);
+  }
+}
+
+// ── Build HubSpot owner map (id → full name) ─────────────────
+async function buildOwnerMap() {
+  const hsKey = process.env.HUBSPOT_API_KEY;
+  if (!hsKey) return;
+  try {
+    const res  = await fetch(`${HUBSPOT_API}/crm/v3/owners?limit=100`, {
+      headers: { Authorization: `Bearer ${hsKey}` }
+    });
+    const data = await res.json();
+    (data.results || []).forEach(owner => {
+      const name = [owner.firstName, owner.lastName].filter(Boolean).join(' ');
+      ownerMap[String(owner.id)] = name;
+    });
+    console.log('[TASK] Owner map:', JSON.stringify(ownerMap));
+  } catch (e) {
+    console.error('[TASK] Owner map error:', e.message);
   }
 }
 
@@ -111,11 +131,12 @@ function syncLeaderProjects(deals) {
     const title      = jobMatch ? jobMatch[2].trim() : (p.dealname || 'Unnamed');
     const projectNumber = jobMatch ? jobMatch[1] : '';
 
-    // Try every plausible property name for project leader
-    const rawLeader = p.project_leader || p.project_lead || p.deal_project_leader ||
-                      p.project_manager || p.project_leader_name || '';
-    const hsLeader  = normalizeLeader(rawLeader);
-    console.log(`[DEBUG] Deal ${deal.id} "${p.dealname}" | leader raw: "${rawLeader}" | resolved: "${hsLeader}" | closedate: "${closeDate}"`);
+    // Resolve project_leader: may be a numeric owner ID or a text name
+    const rawLeader  = p.project_leader || p.project_lead || p.deal_project_leader ||
+                       p.project_manager || p.project_leader_name || '';
+    const namedLeader = ownerMap[rawLeader] || rawLeader;
+    const hsLeader    = normalizeLeader(namedLeader);
+    console.log(`[DEBUG] Deal ${deal.id} "${p.dealname}" | raw: "${rawLeader}" | name: "${namedLeader}" | resolved: "${hsLeader}"`);
 
     const match = existing.find(e => e.hubspotId === String(deal.id));
     if (match) {
@@ -312,6 +333,7 @@ async function runAIStatusScan() {
 async function init(broadcastFn) {
   broadcast = broadcastFn;
   await buildStageMap();
+  await buildOwnerMap();
 
   // Set TZ=America/New_York in Railway vars for 8am ET
   cron.schedule('0 8 * * *',   () => runHubSpotSync());
