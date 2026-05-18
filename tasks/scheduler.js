@@ -251,8 +251,11 @@ async function runHubSpotSync() {
         const contactById = {};
         (batchData.results || []).forEach(c => {
           const p = c.properties;
-          contactById[c.id] = {
-            contactName:  [p.firstname, p.lastname].filter(Boolean).join(' '),
+          const first = (p.firstname || '').trim();
+        const last  = (p.lastname  || '').trim();
+        const fullName = (last && !first.toLowerCase().endsWith(last.toLowerCase())) ? `${first} ${last}`.trim() : first;
+        contactById[c.id] = {
+            contactName:  fullName,
             contactPhone: p.phone || p.mobilephone || '',
             contactEmail: p.email || ''
           };
