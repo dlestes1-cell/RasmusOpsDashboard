@@ -459,8 +459,9 @@ async function runDailyDigest() {
   <p style="margin:24px 0 0;font-size:11px;color:#aaa;font-family:monospace">Rasmus Field Operations Dashboard · Auto-generated at 8:10 AM</p>
 </div></body></html>`;
 
-    await gmail.sendEmail(email, `Field Ops Digest — ${dateLabel}`, html);
-    sentTo.add(leader);
+    console.log(`[DIGEST] Sending to ${leader} at ${email}`);
+    const sent = await gmail.sendEmail(email, `Field Ops Digest — ${dateLabel}`, html);
+    if (sent) sentTo.add(leader);
   }
 
   console.log(`[DIGEST] Sent to ${sentTo.size} leaders: ${[...sentTo].join(', ')}`);
