@@ -220,6 +220,21 @@ app.post('/api/sync/trigger', async (req, res) => {
   }
 });
 
+// ── HubSpot pipelines list ────────────────────────────────────
+app.get('/api/sync/pipelines', async (req, res) => {
+  const hsKey = process.env.HUBSPOT_API_KEY;
+  if (!hsKey) return res.status(503).json({ error: 'No HUBSPOT_API_KEY' });
+  try {
+    const r = await fetch('https://api.hubapi.com/crm/v3/pipelines/deals', {
+      headers: { Authorization: `Bearer ${hsKey}` }
+    });
+    const data = await r.json();
+    res.json((data.results || []).map(p => ({ id: p.id, label: p.label })));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── HubSpot raw debug — find the project leader property name ─
 app.get('/api/sync/debug', async (req, res) => {
   const hsKey = process.env.HUBSPOT_API_KEY;
