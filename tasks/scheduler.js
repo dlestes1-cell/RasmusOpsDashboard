@@ -488,4 +488,4 @@ async function init(broadcastFn) {
   console.log('[CRON] All tasks active.');
 }
 
-module.exports = { init, runHubSpotSync, runDailyDigest };
+module.exports = { init, runHubSpotSync, runDailyDigest, normalizeLeader, stageToStatus, runConfirmationCheck };
