@@ -269,6 +269,16 @@ app.post('/api/test-send', async (req, res) => {
   }
 });
 
+// ── Manual overdue draft trigger ──────────────────────────────
+app.post('/api/overdue-draft/trigger', async (req, res) => {
+  try {
+    await scheduler.runOverdueDraft();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Manual digest trigger ─────────────────────────────────────
 app.post('/api/digest/trigger', async (req, res) => {
   try {

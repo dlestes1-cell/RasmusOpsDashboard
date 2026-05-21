@@ -59,4 +59,21 @@ async function sendEmail(to, subject, htmlBody) {
   return { ok: false, gmailError: data };
 }
 
-module.exports = { getAccessToken, searchMessages, sendEmail };
+async function createDraft(to, subject, htmlBody) {
+  const token = await getAccessToken();
+  if (!token) { console.log('[GMAIL] No token — cannot create draft'); return false; }
+  const raw = Buffer.from(
+    `To: ${to}\r\nSubject: ${subject}\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=utf-8\r\n\r\n${htmlBody}`
+  ).toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  const res  = await fetch(`${GMAIL_API}/users/me/drafts`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: { raw } })
+  });
+  const data = await res.json();
+  if (data.id) { console.log(`[GMAIL] Draft created for ${to}: ${subject}`); return true; }
+  console.error('[GMAIL] Draft creation failed:', JSON.stringify(data));
+  return false;
+}
+
+module.exports = { getAccessToken, searchMessages, sendEmail, createDraft };

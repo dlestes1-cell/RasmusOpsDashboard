@@ -467,6 +467,45 @@ async function runDailyDigest() {
   console.log(`[DIGEST] Sent to ${sentTo.size} leaders: ${[...sentTo].join(', ')}`);
 }
 
+// ── TASK 6: Overdue draft — 8:15 AM daily ────────────────────
+async function runOverdueDraft() {
+  const hasGmail = process.env.GMAIL_REFRESH_TOKEN && process.env.GMAIL_CLIENT_ID;
+  if (!hasGmail) { console.log('[OVERDUE] No Gmail credentials — skipping'); return; }
+
+  const overdue = getConfirmations().filter(c => !c.sent && (Date.now() - c.completedAt) >= WINDOW_MS);
+  if (!overdue.length) { console.log('[OVERDUE] No overdue confirmations — skipping draft'); return; }
+
+  const dateLabel = new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
+
+  const rows = overdue.map(c => {
+    const hoursOver = Math.floor((Date.now() - c.completedAt - WINDOW_MS) / 3600000);
+    return `<tr>
+      <td style="padding:8px 16px 8px 0;font-size:13px;font-weight:600;color:#1a1a1a">${c.site}</td>
+      <td style="padding:8px 16px 8px 0;font-family:monospace;font-size:11px;color:#666">${c.recipient || '—'}</td>
+      <td style="padding:8px 0;font-family:monospace;font-size:11px;color:#c84b4b;font-weight:600">${hoursOver}h overdue</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><body style="font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;margin:0;padding:24px;background:#f9f8f5">
+<div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid #e5e3db;padding:28px">
+  <p style="font-family:monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.15em;color:#999;margin:0 0 4px">Rasmus Auctions · Field Operations</p>
+  <h1 style="font-size:20px;font-weight:700;margin:0 0 2px;color:#c84b4b">⚠ Overdue Site Confirmations</h1>
+  <p style="color:#666;font-size:13px;margin:0 0 24px">${dateLabel} — ${overdue.length} confirmation${overdue.length !== 1 ? 's' : ''} past the 24-hour window</p>
+  <table style="width:100%;border-collapse:collapse;border-top:2px solid #e5e3db">
+    <thead><tr>
+      <th style="text-align:left;padding:6px 16px 6px 0;font-family:monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:#999">Site</th>
+      <th style="text-align:left;padding:6px 16px 6px 0;font-family:monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:#999">Recipient</th>
+      <th style="text-align:left;padding:6px 0;font-family:monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:#999">Status</th>
+    </tr></thead>
+    <tbody style="border-top:1px solid #e5e3db">${rows}</tbody>
+  </table>
+  <p style="margin:24px 0 0;font-size:11px;color:#aaa;font-family:monospace">Rasmus Field Operations Dashboard · Auto-generated at 8:15 AM</p>
+</div></body></html>`;
+
+  const ok = await gmail.createDraft('destes@rasmus.com', `⚠ ${overdue.length} Overdue Confirmation${overdue.length !== 1 ? 's' : ''} — ${dateLabel}`, html);
+  if (ok) console.log(`[OVERDUE] Draft created: ${overdue.length} overdue items`);
+}
+
 // ── Init ──────────────────────────────────────────────────────
 async function init(broadcastFn) {
   broadcast = broadcastFn;
@@ -478,6 +517,7 @@ async function init(broadcastFn) {
   cron.schedule('0 8 * * *',   () => runHubSpotSync());
   cron.schedule('5 8 * * *',   () => runGmailSync());
   cron.schedule('10 8 * * *',  () => runDailyDigest());
+  cron.schedule('15 8 * * *',  () => runOverdueDraft());
   cron.schedule('*/5 * * * *', () => runConfirmationCheck());
   cron.schedule('0 */6 * * *', () => runAIStatusScan());
 
@@ -488,4 +528,4 @@ async function init(broadcastFn) {
   console.log('[CRON] All tasks active.');
 }
 
-module.exports = { init, runHubSpotSync, runDailyDigest, normalizeLeader, stageToStatus, runConfirmationCheck };
+module.exports = { init, runHubSpotSync, runDailyDigest, runOverdueDraft, normalizeLeader, stageToStatus, runConfirmationCheck };
