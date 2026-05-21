@@ -192,7 +192,7 @@ async function runHubSpotSync() {
 
   const requestBody = {
     limit: 200,
-    properties: ['dealname','dealstage','pipeline','closedate','createdate','description','amount','project_leader','hubspot_owner_id'],
+    properties: ['dealname','dealstage','pipeline','closedate','createdate','description','amount','project_leader','hubspot_owner_id','hs_date_entered_249570210'],
     sorts: [{ propertyName: 'closedate', direction: 'ASCENDING' }],
     filterGroups: [{ filters: [
       { propertyName: 'pipeline',   operator: 'EQ',     value: '147097136' },
@@ -511,29 +511,41 @@ async function runOverdueDraft() {
 function syncConfirmations(deals, contactMap) {
   const today    = new Date().toISOString().slice(0, 10);
   const existing = getConfirmations();
-  const existingHubspotIds = new Set(existing.map(c => c.hubspotId).filter(Boolean));
+  const existingByHubspotId = Object.fromEntries(existing.filter(c => c.hubspotId).map(c => [c.hubspotId, c]));
 
   deals.forEach(deal => {
     const p     = deal.properties;
     const stage = stageMap[p.dealstage] || p.dealstage || '';
     if (!stage.toLowerCase().includes('new auction')) return;
-    if (existingHubspotIds.has(String(deal.id))) return;
 
     const closeDate  = p.closedate ? p.closedate.split('T')[0] : '';
     const jobMatch   = (p.dealname || '').match(/^(R\d+)\s+(.*)/i);
     const siteName   = jobMatch ? `${jobMatch[1]} — ${jobMatch[2].trim()}` : (p.dealname || 'Unnamed');
     const contact    = contactMap[deal.id] || {};
+    const idDateRaw  = p.hs_date_entered_249570210;
+    const idDate     = idDateRaw ? new Date(idDateRaw).getTime() : null;
+
+    const existing = existingByHubspotId[String(deal.id)];
+    if (existing) {
+      // Update completedAt if ID date is now available and wasn't set before
+      if (idDate && (!existing.idDateSet)) {
+        updateConfirmation(existing.id, { completedAt: idDate, idDateSet: true });
+        console.log(`[CONF] ID date set for: ${siteName}`);
+      }
+      return;
+    }
 
     addConfirmation({
       site:        siteName,
       recipient:   contact.contactEmail || '',
       project:     p.dealname || '',
-      completedAt: Date.now(),
+      completedAt: idDate || 0,
+      idDateSet:   !!idDate,
       hubspotId:   String(deal.id),
       removalDate: closeDate,
       createdAt:   Date.now()
     });
-    console.log(`[CONF] Auto-created pending job: ${siteName}`);
+    console.log(`[CONF] Auto-created pending job: ${siteName}${idDate ? ' (ID date set)' : ' (awaiting ID)'}`);
   });
 
   // Remove entries whose auction date has passed

@@ -631,9 +631,9 @@ function renderStats() {
   set('sActive',  p.filter(x => x.status !== 'complete').length);
   set('sOnTrack', p.filter(x => x.status === 'on-track').length);
   set('sAtRisk',  p.filter(x => x.status === 'at-risk' || x.status === 'needs-attention').length);
-  set('sPending', c.filter(x => !x.sent && (now - x.completedAt) < 864e5).length);
+  set('sPending', c.filter(x => !x.sent && x.idDateSet && (now - x.completedAt) < 864e5).length);
   set('sDone',    c.filter(x => x.sent).length);
-  set('sOverdue', c.filter(x => !x.sent && (now - x.completedAt) >= 864e5).length);
+  set('sOverdue', c.filter(x => !x.sent && x.idDateSet && (now - x.completedAt) >= 864e5).length);
 }
 
 function renderAlerts() {
@@ -755,10 +755,12 @@ function renderPending() {
     let statusHtml;
     if (e.sent) {
       statusHtml = `<span class="status-badge complete">Confirmed</span>`;
-    } else if (!e.sent && (now - (e.completedAt||0)) >= 864e5) {
+    } else if (!e.idDateSet || !e.completedAt) {
+      statusHtml = `<span class="status-badge at-risk">Awaiting ID</span>`;
+    } else if ((now - e.completedAt) >= 864e5) {
       statusHtml = `<span class="status-badge needs-attention">Overdue</span>`;
     } else {
-      statusHtml = `<span class="status-badge on-track">Pending</span>`;
+      statusHtml = `<span class="status-badge on-track">ID Received</span>`;
     }
     return `<tr id="ec-${e.id}">
       <td class="pj-job">${esc(jobNum)}</td>
