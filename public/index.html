@@ -28,6 +28,13 @@
   .ws-dot { width:7px; height:7px; border-radius:50%; background:var(--text-dim); transition:background 0.4s; }
   .ws-dot.live { background:var(--green); box-shadow:0 0 6px var(--green); }
   .ws-dot.error { background:var(--red); }
+  .sync-group { display:flex; align-items:center; gap:10px; }
+  .last-sync-ts { font-family:var(--mono); font-size:10px; color:var(--text-dim); }
+  .sync-btn { background:none; border:1px solid var(--gold-dim); color:var(--gold); font-family:var(--mono); font-size:10px; padding:5px 11px; cursor:pointer; letter-spacing:0.08em; transition:all 0.2s; display:flex; align-items:center; gap:6px; }
+  .sync-btn:hover:not(:disabled) { background:var(--gold); color:var(--bg); }
+  .sync-btn:disabled { opacity:.4; cursor:not-allowed; }
+  .sync-btn .spin { display:inline-block; animation:spin 0.8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
 
   /* Alerts bar */
   #alertBar { display:none; background:rgba(200,75,75,0.08); border-bottom:1px solid rgba(200,75,75,0.25); padding:0 28px; }
@@ -350,6 +357,10 @@
     <div class="logo-sub">Field Operations · Project Command</div>
   </div>
   <div class="header-right">
+    <div class="sync-group">
+      <span class="last-sync-ts" id="lastSync">—</span>
+      <button class="sync-btn" id="syncBtn" onclick="triggerSync()">&#x21BB; Sync</button>
+    </div>
     <div class="live-clock" id="clock"></div>
     <div class="ws-indicator">
       <div class="ws-dot" id="wsDot"></div>
@@ -512,7 +523,6 @@
 
 <footer>
   <div class="footer-text">Rasmus Auctions · Field Operations Dashboard · Railway</div>
-  <div class="footer-text" id="lastSync">Waiting for server…</div>
 </footer>
 
 <script>
@@ -536,8 +546,7 @@ function connect() {
     if (msg.type === 'state') {
       state = msg.data;
       render();
-      document.getElementById('lastSync').textContent =
-        'Last sync: ' + new Date().toLocaleTimeString();
+      setLastSync();
     }
   };
 
@@ -552,6 +561,26 @@ function connect() {
 function setWsStatus(cls, label) {
   document.getElementById('wsDot').className = 'ws-dot ' + cls;
   document.getElementById('wsLabel').textContent = label;
+}
+
+function setLastSync() {
+  document.getElementById('lastSync').textContent =
+    'synced ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+async function triggerSync() {
+  const btn = document.getElementById('syncBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin">&#x21BB;</span> Syncing…';
+  try {
+    const res = await fetch('/api/sync/trigger', { method: 'POST' });
+    if (!res.ok) throw new Error('sync failed');
+  } catch (e) {
+    setLastSync();
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '&#x21BB; Sync';
+  }
 }
 
 connect();
