@@ -243,18 +243,29 @@ app.post('/api/confirmations/:id/send', async (req, res) => {
 
 // ── Test send ─────────────────────────────────────────────────
 app.post('/api/test-send', async (req, res) => {
-  const to = 'destes@rasmus.com';
+  const diag = {
+    hasClientId:     !!process.env.GMAIL_CLIENT_ID,
+    hasClientSecret: !!process.env.GMAIL_CLIENT_SECRET,
+    hasRefreshToken: !!process.env.GMAIL_REFRESH_TOKEN,
+  };
+
+  const token = await gmail.getAccessToken();
+  diag.tokenOk = !!token;
+  if (!token) return res.status(502).json({ error: 'Could not get Gmail access token', diag });
+
+  const to   = 'destes@rasmus.com';
   const html = `<!DOCTYPE html><html><body style="font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;padding:24px;max-width:600px">
     <p style="font-family:monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.15em;color:#999;margin:0 0 16px">Rasmus Auctions · Field Operations</p>
     <p>This is a test email confirming that Gmail send is working correctly from the Field Operations Dashboard.</p>
     <p style="margin-top:16px;color:#666;font-size:12px">Sent at: ${new Date().toLocaleString('en-US', { weekday:'long', month:'long', day:'numeric', hour:'numeric', minute:'2-digit' })}</p>
   </body></html>`;
+
   try {
     const sent = await gmail.sendEmail(to, 'Test — Rasmus Field Ops Dashboard', html);
-    if (!sent) return res.status(502).json({ error: 'Gmail send failed — check server logs' });
-    res.json({ ok: true, to });
+    if (!sent) return res.status(502).json({ error: 'Gmail API rejected the send — check Railway logs for details', diag });
+    res.json({ ok: true, to, diag });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: e.message, diag });
   }
 });
 
