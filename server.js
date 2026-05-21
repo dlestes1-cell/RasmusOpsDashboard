@@ -230,8 +230,8 @@ app.post('/api/confirmations/:id/send', async (req, res) => {
     const subject = `Site Confirmation — ${c.site}`;
     const html = `<!DOCTYPE html><html><body style="font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;padding:24px;max-width:600px">${draftText.replace(/\n/g, '<br>')}</body></html>`;
 
-    const sent = await gmail.sendEmail(c.recipient, subject, html);
-    if (!sent) return res.status(502).json({ error: 'Gmail send failed — check server logs' });
+    const result = await gmail.sendEmail(c.recipient, subject, html);
+    if (!result.ok) return res.status(502).json({ error: 'Gmail send failed', gmailError: result.gmailError });
 
     state.updateConfirmation(c.id, { sent: true });
     broadcast();
@@ -261,8 +261,8 @@ app.post('/api/test-send', async (req, res) => {
   </body></html>`;
 
   try {
-    const sent = await gmail.sendEmail(to, 'Test — Rasmus Field Ops Dashboard', html);
-    if (!sent) return res.status(502).json({ error: 'Gmail API rejected the send — check Railway logs for details', diag });
+    const result = await gmail.sendEmail(to, 'Test — Rasmus Field Ops Dashboard', html);
+    if (!result.ok) return res.status(502).json({ error: 'Gmail API rejected the send', gmailError: result.gmailError, diag });
     res.json({ ok: true, to, diag });
   } catch (e) {
     res.status(500).json({ error: e.message, diag });

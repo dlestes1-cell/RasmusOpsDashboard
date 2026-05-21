@@ -460,8 +460,8 @@ async function runDailyDigest() {
 </div></body></html>`;
 
     console.log(`[DIGEST] Sending to ${leader} at ${email}`);
-    const sent = await gmail.sendEmail(email, `Field Ops Digest — ${dateLabel}`, html);
-    if (sent) sentTo.add(leader);
+    const result = await gmail.sendEmail(email, `Field Ops Digest — ${dateLabel}`, html);
+    if (result.ok) sentTo.add(leader);
   }
 
   console.log(`[DIGEST] Sent to ${sentTo.size} leaders: ${[...sentTo].join(', ')}`);

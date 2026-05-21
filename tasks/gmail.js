@@ -54,9 +54,9 @@ async function sendEmail(to, subject, htmlBody) {
     body: JSON.stringify({ raw })
   });
   const data = await res.json();
-  if (data.id) { console.log(`[GMAIL] Sent to ${to}: ${subject}`); return true; }
+  if (data.id) { console.log(`[GMAIL] Sent to ${to}: ${subject}`); return { ok: true }; }
   console.error('[GMAIL] Send failed:', JSON.stringify(data));
-  return false;
+  return { ok: false, gmailError: data };
 }
 
 module.exports = { getAccessToken, searchMessages, sendEmail };
