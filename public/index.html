@@ -53,7 +53,7 @@
   .stat-value.green { color:var(--green); } .stat-value.amber { color:var(--amber); } .stat-value.red { color:var(--red); }
 
   /* Layout */
-  main { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--border); flex:1; }
+  main { display:grid; grid-template-columns:1fr; gap:1px; background:var(--border); }
   .panel { background:var(--surface); display:flex; flex-direction:column; }
   .panel-header { padding:18px 24px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
   .panel-title { font-family:var(--serif); font-size:16px; color:var(--text); display:flex; align-items:center; gap:10px; }
@@ -65,6 +65,20 @@
   .panel-body { flex:1; overflow-y:auto; padding:14px 24px; display:flex; flex-direction:column; gap:10px; }
   .panel-body::-webkit-scrollbar { width:3px; }
   .panel-body::-webkit-scrollbar-thumb { background:var(--border); }
+
+  /* Pending Jobs Panel */
+  #pendingPane { background:var(--surface); border-top:1px solid var(--border); }
+  .pending-header { padding:18px 24px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; background:var(--surface); }
+  .pending-table { width:100%; border-collapse:collapse; }
+  .pending-table th { padding:8px 12px; font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-dim); text-align:left; border-bottom:1px solid var(--border); background:var(--surface2); }
+  .pending-table td { padding:10px 12px; font-size:12px; border-bottom:1px solid rgba(46,44,30,0.5); vertical-align:middle; }
+  .pending-table tr:last-child td { border-bottom:none; }
+  .pending-table tr:hover td { background:var(--surface2); }
+  .pj-job   { font-family:var(--mono); font-size:11px; color:var(--text-dim); white-space:nowrap; }
+  .pj-name  { font-weight:600; color:var(--text); }
+  .pj-recip { font-family:var(--mono); font-size:11px; color:var(--text-mid); }
+  .pj-date  { font-family:var(--mono); font-size:11px; color:var(--text-dim); white-space:nowrap; }
+  .pj-actions { display:flex; gap:6px; white-space:nowrap; }
 
   /* Add Forms */
   .add-form { display:none; background:var(--surface2); border:1px solid var(--gold-dim); padding:16px; flex-direction:column; gap:10px; animation:fadein 0.2s ease; }
@@ -445,31 +459,31 @@
     </div>
   </div>
 
-  <!-- Confirmations -->
-  <div class="panel">
-    <div class="panel-header">
-      <div class="panel-title"><span class="dot amber"></span> Site Confirmations</div>
-      <button class="add-btn" onclick="toggleForm('addEmail')">+ Add Site</button>
-    </div>
-    <div class="panel-body">
-      <div class="add-form" id="addEmail">
-        <div class="form-row">
-          <div class="form-group"><label>Site / Client Name</label><input id="eSite" placeholder="Fairview Estate" /></div>
-          <div class="form-group"><label>Recipient Email</label><input id="eEmail" placeholder="contact@estate.com" /></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label>Completed (date/time)</label><input type="datetime-local" id="eCompleted" /></div>
-          <div class="form-group"><label>Project</label><input id="eProject" placeholder="Link to project…" /></div>
-        </div>
-        <div class="form-actions">
-          <button class="btn-secondary" onclick="toggleForm('addEmail')">Cancel</button>
-          <button class="btn-primary" onclick="submitEmail()">Add Site</button>
-        </div>
-      </div>
-      <div id="emailList"></div>
-    </div>
-  </div>
 </main>
+
+<!-- Pending Jobs Panel -->
+<div id="pendingPane">
+  <div class="pending-header">
+    <div class="panel-title"><span class="dot amber"></span> Pending Site Confirmations</div>
+    <span id="pendingCount" style="font-family:var(--mono);font-size:10px;color:var(--text-dim)"></span>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="pending-table">
+      <thead>
+        <tr>
+          <th>Job #</th>
+          <th>Site / Name</th>
+          <th>Recipient</th>
+          <th>Entered</th>
+          <th>Auction Date</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="pendingList"></tbody>
+    </table>
+  </div>
+</div>
 
 <!-- Project Leaders Pane -->
 <div id="leaderPane">
@@ -602,7 +616,7 @@ function render() {
   renderAlerts();
   renderAuctionStrip();
   renderProjects();
-  renderEmails();
+  renderPending();
   renderLeaderProjects();
   if (drawerProjectId) {
     const p = (state.projects||[]).find(x => x.id === drawerProjectId);
@@ -722,35 +736,45 @@ function renderProjects() {
   }).join('');
 }
 
-function renderEmails() {
-  const el = document.getElementById('emailList');
-  const c  = [...(state.confirmations||[])].sort((a,b) => {
-    if (a.sent && !b.sent) return 1;
-    if (!a.sent && b.sent) return -1;
-    return (a.completedAt + 864e5 - Date.now()) - (b.completedAt + 864e5 - Date.now());
-  });
-  if (!c.length) { el.innerHTML = emptyState('📧', 'No site confirmations tracked.'); return; }
-  el.innerHTML = c.map(e => {
-    const cd = e.sent ? { label:'Sent ✓', cls:'done' } : countdown(e.completedAt);
-    return `
-    <div class="email-card ${e.sent?'sent':''} ${e.flagged&&!e.sent?'flagged':''}" id="ec-${e.id}">
-      <div class="ec-top">
-        <div class="email-site">${esc(e.site)}</div>
-        <div class="countdown ${cd.cls}">${cd.label}</div>
-      </div>
-      <div class="email-meta">
-        <div class="meta-item"><div class="meta-label">Recipient</div><div class="meta-value">${esc(e.recipient||'—')}</div></div>
-        <div class="meta-item"><div class="meta-label">Completed</div><div class="meta-value">${fmtDate(e.completedAt)}</div></div>
-        ${e.project?`<div class="meta-item"><div class="meta-label">Project</div><div class="meta-value">${esc(e.project)}</div></div>`:''}
-      </div>
-      <div class="ec-actions">
-        <button class="draft-btn" onclick="aiDraft('${e.id}')" ${e.sent?'disabled':''}>✦ Draft Email</button>
-        <button class="send-btn" onclick="sendConfirmation('${e.id}')" ${e.sent?'disabled':''}>
-          ${e.sent?'Confirmed ✓':'Send Email'}
+function renderPending() {
+  const tbody = document.getElementById('pendingList');
+  if (!tbody) return;
+  const now = Date.now();
+  const items = [...(state.confirmations||[])].sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+  document.getElementById('pendingCount').textContent = items.length ? `${items.length} job${items.length!==1?'s':''}` : '';
+  if (!items.length) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--text-dim);font-family:var(--mono);font-size:11px">No pending confirmations</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = items.map(e => {
+    const parts    = (e.site||'').split(' — ');
+    const jobNum   = parts.length > 1 ? parts[0] : '';
+    const siteName = parts.length > 1 ? parts.slice(1).join(' — ') : e.site;
+    const entered  = e.createdAt ? new Date(e.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—';
+    const auctDate = e.removalDate || '—';
+    let statusHtml;
+    if (e.sent) {
+      statusHtml = `<span class="status-badge complete">Confirmed</span>`;
+    } else if (!e.sent && (now - (e.completedAt||0)) >= 864e5) {
+      statusHtml = `<span class="status-badge needs-attention">Overdue</span>`;
+    } else {
+      statusHtml = `<span class="status-badge on-track">Pending</span>`;
+    }
+    return `<tr id="ec-${e.id}">
+      <td class="pj-job">${esc(jobNum)}</td>
+      <td class="pj-name">${esc(siteName)}</td>
+      <td class="pj-recip">${esc(e.recipient||'—')}</td>
+      <td class="pj-date">${entered}</td>
+      <td class="pj-date">${auctDate}</td>
+      <td>${statusHtml}</td>
+      <td class="pj-actions">
+        <button class="draft-btn" onclick="aiDraft('${e.id}')" ${e.sent?'disabled':''}>✦ Draft</button>
+        <button class="send-btn" onclick="sendConfirmation('${e.id}')" ${e.sent?'disabled':''} style="padding:4px 9px">
+          ${e.sent?'Sent ✓':'Send'}
         </button>
         <button class="del-btn" onclick="deleteEmail('${e.id}')">✕</button>
-      </div>
-    </div>`;
+      </td>
+    </tr>`;
   }).join('');
 }
 
@@ -812,21 +836,6 @@ async function submitLog(projectId) {
   });
 }
 
-async function submitEmail() {
-  const site = document.getElementById('eSite').value.trim();
-  if (!site) return alert('Site name required.');
-  const dt = document.getElementById('eCompleted').value;
-  await fetch('/api/confirmations', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({
-      site, recipient: document.getElementById('eEmail').value.trim(),
-      project: document.getElementById('eProject').value.trim(),
-      completedAt: dt ? new Date(dt).getTime() : Date.now()
-    })
-  });
-  toggleForm('addEmail');
-  ['eSite','eEmail','eCompleted','eProject'].forEach(id => document.getElementById(id).value='');
-}
 
 async function aiSummary(projectId) {
   const btn = document.querySelector(`#pc-${projectId} .ai-btn`);

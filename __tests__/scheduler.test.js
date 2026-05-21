@@ -14,6 +14,8 @@ const stateMocks = {};
 jest.mock('../state', () => ({
   getConfirmations:    (...a) => stateMocks.getConfirmations(...a),
   updateConfirmation:  (...a) => stateMocks.updateConfirmation(...a),
+  addConfirmation:     (...a) => stateMocks.addConfirmation(...a),
+  deleteConfirmation:  (...a) => stateMocks.deleteConfirmation(...a),
   addAlert:            (...a) => stateMocks.addAlert(...a),
   getProjects:         (...a) => stateMocks.getProjects(...a),
   updateProject:       (...a) => stateMocks.updateProject(...a),
@@ -30,6 +32,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   stateMocks.getConfirmations    = jest.fn().mockReturnValue([]);
   stateMocks.updateConfirmation  = jest.fn();
+  stateMocks.addConfirmation     = jest.fn();
+  stateMocks.deleteConfirmation  = jest.fn();
   stateMocks.addAlert            = jest.fn();
   stateMocks.getProjects         = jest.fn().mockReturnValue([]);
   stateMocks.updateProject       = jest.fn();

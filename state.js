@@ -30,26 +30,7 @@ let state = {
       createdAt: now()
     }
   ],
-  confirmations: [
-    {
-      id: uid(), site: 'Henderson Estate — Site Closeout',
-      recipient: 'henderson@gmail.com', project: 'Henderson Estate',
-      completedAt: now() - 18 * 3600 * 1000, sent: false,
-      flagged: false, draftText: ''
-    },
-    {
-      id: uid(), site: 'Coastal Marine — Dock Return',
-      recipient: 'ops@coastalmarine.com', project: 'Coastal Marine Surplus',
-      completedAt: now() - 26 * 3600 * 1000, sent: false,
-      flagged: true, draftText: ''           // already overdue — pre-flagged
-    },
-    {
-      id: uid(), site: 'Quentin Farm Auction',
-      recipient: 'quentin@farmauctions.net', project: '',
-      completedAt: now() - 6 * 3600 * 1000, sent: false,
-      flagged: false, draftText: ''
-    }
-  ],
+  confirmations: [],
   alerts: [],  // { id, type, message, projectId?, confirmationId?, ts }
   leaderProjects: []  // { id, projectNumber, title, leader, startDate, removalDate, createdAt }
 };

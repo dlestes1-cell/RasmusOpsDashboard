@@ -2,7 +2,7 @@
 const cron  = require('node-cron');
 const gmail  = require('./gmail');
 const {
-  getConfirmations, updateConfirmation, addAlert,
+  getConfirmations, updateConfirmation, addConfirmation, deleteConfirmation, addAlert,
   getProjects, updateProject, setProjects,
   getLeaderProjects, addLeaderProject, updateLeaderProject, deleteLeaderProject
 } = require('../state');
@@ -309,6 +309,7 @@ async function runHubSpotSync() {
 
     setProjects(projects);
     syncLeaderProjects(deals);
+    syncConfirmations(deals, contactMap);
     addAlert({ type:'sync', message:`🔄 HubSpot sync — ${projects.length} active deals at ${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}` });
     console.log(`[TASK] HubSpot: ${projects.length} projects loaded`);
     if (broadcast) broadcast();
@@ -506,6 +507,44 @@ async function runOverdueDraft() {
   if (ok) console.log(`[OVERDUE] Draft created: ${overdue.length} overdue items`);
 }
 
+// ── Confirmation sync (called from HubSpot sync) ─────────────
+function syncConfirmations(deals, contactMap) {
+  const today    = new Date().toISOString().slice(0, 10);
+  const existing = getConfirmations();
+  const existingHubspotIds = new Set(existing.map(c => c.hubspotId).filter(Boolean));
+
+  deals.forEach(deal => {
+    const p     = deal.properties;
+    const stage = stageMap[p.dealstage] || p.dealstage || '';
+    if (!stage.toLowerCase().includes('new auction')) return;
+    if (existingHubspotIds.has(String(deal.id))) return;
+
+    const closeDate  = p.closedate ? p.closedate.split('T')[0] : '';
+    const jobMatch   = (p.dealname || '').match(/^(R\d+)\s+(.*)/i);
+    const siteName   = jobMatch ? `${jobMatch[1]} — ${jobMatch[2].trim()}` : (p.dealname || 'Unnamed');
+    const contact    = contactMap[deal.id] || {};
+
+    addConfirmation({
+      site:        siteName,
+      recipient:   contact.contactEmail || '',
+      project:     p.dealname || '',
+      completedAt: Date.now(),
+      hubspotId:   String(deal.id),
+      removalDate: closeDate,
+      createdAt:   Date.now()
+    });
+    console.log(`[CONF] Auto-created pending job: ${siteName}`);
+  });
+
+  // Remove entries whose auction date has passed
+  getConfirmations()
+    .filter(c => c.hubspotId && c.removalDate && c.removalDate < today)
+    .forEach(c => {
+      deleteConfirmation(c.id);
+      console.log(`[CONF] Removed expired job: ${c.site}`);
+    });
+}
+
 // ── Init ──────────────────────────────────────────────────────
 async function init(broadcastFn) {
   broadcast = broadcastFn;
@@ -528,4 +567,4 @@ async function init(broadcastFn) {
   console.log('[CRON] All tasks active.');
 }
 
-module.exports = { init, runHubSpotSync, runDailyDigest, runOverdueDraft, normalizeLeader, stageToStatus, runConfirmationCheck };
+module.exports = { init, runHubSpotSync, runDailyDigest, runOverdueDraft, normalizeLeader, stageToStatus, runConfirmationCheck, syncConfirmations };
