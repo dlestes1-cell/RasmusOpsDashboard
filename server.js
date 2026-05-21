@@ -6,6 +6,7 @@ const path      = require('path');
 
 const state     = require('./state');
 const scheduler = require('./tasks/scheduler');
+const gmail     = require('./tasks/gmail');
 
 const app    = express();
 const server = http.createServer(app);
@@ -176,43 +177,82 @@ Write only the 2-sentence note, no preamble.`
   }
 });
 
-app.post('/api/ai/draft-email', async (req, res) => {
+async function generateConfirmationDraft(c) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured' });
-
-  const { confirmationId } = req.body;
-  const c = state.getConfirmation(confirmationId);
-  if (!c) return res.status(404).json({ error: 'Confirmation not found' });
-
-  try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 400,
-        messages: [{
-          role: 'user',
-          content: `You are writing on behalf of Rasmus Auctions Field Operations. Write a professional post-project site confirmation email.
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 400,
+      messages: [{ role: 'user', content: `You are writing on behalf of Rasmus Auctions Field Operations. Write a professional post-project site confirmation email.
 
 Site/Client: ${c.site}
 Recipient: ${c.recipient || 'the client'}
 Project Completed: ${new Date(c.completedAt).toLocaleString('en-US', { weekday:'long', month:'long', day:'numeric', hour:'numeric', minute:'2-digit' })}
 ${c.project ? `Related project: ${c.project}` : ''}
 
-The email should confirm project/auction completion, thank them, note next steps in general terms, and be signed from "Field Operations, Rasmus Auctions". Write ONLY the email body, under 150 words.`
-        }]
-      })
-    });
-    const data = await r.json();
-    const text = data.content?.[0]?.text || '';
+The email should confirm project/auction completion, thank them, note next steps in general terms, and be signed from "Field Operations, Rasmus Auctions". Write ONLY the email body, under 150 words.` }]
+    })
+  });
+  const data = await r.json();
+  return data.content?.[0]?.text || '';
+}
+
+app.post('/api/ai/draft-email', async (req, res) => {
+  const { confirmationId } = req.body;
+  const c = state.getConfirmation(confirmationId);
+  if (!c) return res.status(404).json({ error: 'Confirmation not found' });
+  try {
+    const text = await generateConfirmationDraft(c);
     state.updateConfirmation(confirmationId, { draftText: text });
     broadcast();
     res.json({ text });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/confirmations/:id/send', async (req, res) => {
+  const c = state.getConfirmation(req.params.id);
+  if (!c) return res.status(404).json({ error: 'Confirmation not found' });
+  if (!c.recipient) return res.status(400).json({ error: 'No recipient email on this confirmation' });
+
+  try {
+    let draftText = c.draftText;
+    if (!draftText) {
+      draftText = await generateConfirmationDraft(c);
+      if (draftText) state.updateConfirmation(c.id, { draftText });
+    }
+    if (!draftText) return res.status(500).json({ error: 'Could not generate email draft' });
+
+    const subject = `Site Confirmation — ${c.site}`;
+    const html = `<!DOCTYPE html><html><body style="font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;padding:24px;max-width:600px">${draftText.replace(/\n/g, '<br>')}</body></html>`;
+
+    const sent = await gmail.sendEmail(c.recipient, subject, html);
+    if (!sent) return res.status(502).json({ error: 'Gmail send failed — check server logs' });
+
+    state.updateConfirmation(c.id, { sent: true });
+    broadcast();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Test send ─────────────────────────────────────────────────
+app.post('/api/test-send', async (req, res) => {
+  const to = 'destes@rasmus.com';
+  const html = `<!DOCTYPE html><html><body style="font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;padding:24px;max-width:600px">
+    <p style="font-family:monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.15em;color:#999;margin:0 0 16px">Rasmus Auctions · Field Operations</p>
+    <p>This is a test email confirming that Gmail send is working correctly from the Field Operations Dashboard.</p>
+    <p style="margin-top:16px;color:#666;font-size:12px">Sent at: ${new Date().toLocaleString('en-US', { weekday:'long', month:'long', day:'numeric', hour:'numeric', minute:'2-digit' })}</p>
+  </body></html>`;
+  try {
+    const sent = await gmail.sendEmail(to, 'Test — Rasmus Field Ops Dashboard', html);
+    if (!sent) return res.status(502).json({ error: 'Gmail send failed — check server logs' });
+    res.json({ ok: true, to });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

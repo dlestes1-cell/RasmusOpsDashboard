@@ -346,7 +346,8 @@
     <div id="draftContent" class="draft-body"></div>
     <div class="modal-btns">
       <button class="btn-secondary" onclick="closeDraft()">Close</button>
-      <button class="btn-primary" onclick="copyDraft()">Copy to Clipboard</button>
+      <button class="btn-secondary" id="copyDraftBtn" onclick="copyDraft()">Copy</button>
+      <button class="btn-primary" id="sendDraftBtn" onclick="sendFromModal()">Send via Gmail</button>
     </div>
   </div>
 </div>
@@ -532,6 +533,7 @@ let ws, reconnectTimer;
 let state = { projects: [], confirmations: [], alerts: [], leaderProjects: [] };
 let drawerProjectId = null;
 let currentDraftText = '';
+let currentDraftConfirmationId = null;
 
 function connect() {
   ws = new WebSocket(`${proto}://${location.host}`);
@@ -743,8 +745,8 @@ function renderEmails() {
       </div>
       <div class="ec-actions">
         <button class="draft-btn" onclick="aiDraft('${e.id}')" ${e.sent?'disabled':''}>✦ Draft Email</button>
-        <button class="send-btn" onclick="markSent('${e.id}')" ${e.sent?'disabled':''}>
-          ${e.sent?'Confirmed':'Mark as Sent'}
+        <button class="send-btn" onclick="sendConfirmation('${e.id}')" ${e.sent?'disabled':''}>
+          ${e.sent?'Confirmed ✓':'Send Email'}
         </button>
         <button class="del-btn" onclick="deleteEmail('${e.id}')">✕</button>
       </div>
@@ -835,8 +837,10 @@ async function aiSummary(projectId) {
 
 async function aiDraft(confirmationId) {
   const e = (state.confirmations||[]).find(x => x.id === confirmationId);
+  currentDraftConfirmationId = confirmationId;
   document.getElementById('draftMeta').textContent = `For: ${e?.site || ''} → ${e?.recipient || 'recipient'}`;
   document.getElementById('draftContent').innerHTML = '<div class="draft-loading">Generating via Claude…</div>';
+  document.getElementById('sendDraftBtn').disabled = true;
   document.getElementById('draftModal').classList.add('open');
   currentDraftText = '';
 
@@ -844,14 +848,44 @@ async function aiDraft(confirmationId) {
   const data = await res.json();
   currentDraftText = data.text || data.error || 'Error generating draft.';
   document.getElementById('draftContent').textContent = currentDraftText;
+  document.getElementById('sendDraftBtn').disabled = false;
 }
 
-function closeDraft() { document.getElementById('draftModal').classList.remove('open'); }
+function closeDraft() {
+  document.getElementById('draftModal').classList.remove('open');
+  currentDraftConfirmationId = null;
+}
+
 function copyDraft() {
   navigator.clipboard.writeText(currentDraftText).then(() => {
-    const btn = document.querySelector('.modal-inner .btn-primary');
-    btn.textContent='Copied!'; setTimeout(()=>btn.textContent='Copy to Clipboard',2000);
+    const btn = document.getElementById('copyDraftBtn');
+    btn.textContent='Copied!'; setTimeout(()=>btn.textContent='Copy',2000);
   });
+}
+
+async function sendFromModal() {
+  if (!currentDraftConfirmationId) return;
+  const ok = await sendConfirmation(currentDraftConfirmationId, document.getElementById('sendDraftBtn'));
+  if (ok) closeDraft();
+}
+
+async function sendConfirmation(id, btnOverride) {
+  const card = document.querySelector(`#ec-${id} .send-btn`);
+  const btn  = btnOverride || card;
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  try {
+    const res  = await fetch(`/api/confirmations/${id}/send`, { method:'POST' });
+    const data = await res.json();
+    if (!res.ok) { alert(`Send failed: ${data.error}`); return false; }
+    return true;
+  } catch (e) {
+    alert('Send failed: ' + e.message);
+    return false;
+  } finally {
+    if (btn && btn !== document.getElementById('sendDraftBtn')) {
+      btn.disabled = false; btn.textContent = 'Send Email';
+    }
+  }
 }
 
 // ── Tab switching ─────────────────────────────────────────────
