@@ -47,11 +47,11 @@ function normalizeLeader(raw) {
 }
 
 function stageToStatus(label) {
-  if (!label) return 'on-track';
+  if (!label) return 'identification';
   const l = label.toLowerCase();
-  if (l.includes('reconciliation'))   return 'needs-attention';
-  if (l.includes('selling & closing') || l.includes('selling online') || l.includes('live show')) return 'at-risk';
-  return 'on-track';
+  if (l.includes('reconciliation')) return 'removal';
+  if (l.includes('selling') || l.includes('live show')) return 'selling-online';
+  return 'identification';
 }
 
 function daysBefore(n) {
@@ -383,7 +383,7 @@ function runConfirmationCheck() {
 async function runAIStatusScan() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return;
-  const projects = getProjects().filter(p => p.status === 'at-risk' || p.status === 'needs-attention');
+  const projects = getProjects().filter(p => p.status === 'selling-online' || p.status === 'removal');
   if (!projects.length) return;
   console.log(`[TASK] AI scan: ${projects.length} at-risk projects`);
   for (const p of projects) {

@@ -100,10 +100,10 @@
   .project-name { font-size:13px; font-weight:600; color:var(--text); }
   .project-loc  { font-family:var(--mono); font-size:10px; color:var(--text-dim); margin-top:2px; }
   .status-badge { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.12em; padding:3px 7px; border-radius:2px; white-space:nowrap; }
-  .status-badge.on-track        { background:rgba(75,200,122,.1); color:var(--green); border:1px solid rgba(75,200,122,.25); }
-  .status-badge.at-risk         { background:rgba(200,148,75,.1); color:var(--amber); border:1px solid rgba(200,148,75,.25); }
-  .status-badge.needs-attention { background:rgba(200,75,75,.1);  color:var(--red);   border:1px solid rgba(200,75,75,.25); }
-  .status-badge.complete        { background:rgba(75,143,200,.1); color:var(--blue);  border:1px solid rgba(75,143,200,.25); }
+  .status-badge.identification  { background:rgba(75,143,200,.1); color:var(--blue);  border:1px solid rgba(75,143,200,.25); }
+  .status-badge.selling-online  { background:rgba(200,148,75,.1); color:var(--amber); border:1px solid rgba(200,148,75,.25); }
+  .status-badge.removal         { background:rgba(200,75,75,.1);  color:var(--red);   border:1px solid rgba(200,75,75,.25); }
+  .status-badge.complete        { background:rgba(75,200,122,.1); color:var(--green); border:1px solid rgba(75,200,122,.25); }
   .project-notes { font-size:11px; color:var(--text-dim); }
   .pc-actions { display:flex; gap:6px; align-items:center; }
   .status-select { background:var(--bg); border:1px solid var(--border); color:var(--text-mid); font-family:var(--mono); font-size:10px; padding:4px 7px; cursor:pointer; flex:1; }
@@ -392,8 +392,8 @@
 <!-- Stats -->
 <div class="stat-bar">
   <div class="stat"><div class="stat-label">Active Projects</div><div class="stat-value" id="sActive">—</div></div>
-  <div class="stat"><div class="stat-label">On Track</div><div class="stat-value green" id="sOnTrack">—</div></div>
-  <div class="stat"><div class="stat-label">At Risk / Needs Attn.</div><div class="stat-value amber" id="sAtRisk">—</div></div>
+  <div class="stat"><div class="stat-label">Identification</div><div class="stat-value" style="color:var(--blue)" id="sOnTrack">—</div></div>
+  <div class="stat"><div class="stat-label">Selling Online</div><div class="stat-value amber" id="sAtRisk">—</div></div>
   <div class="stat"><div class="stat-label">Emails Pending</div><div class="stat-value red" id="sPending">—</div></div>
   <div class="stat"><div class="stat-label">Confirmed</div><div class="stat-value" id="sDone">—</div></div>
   <div class="stat"><div class="stat-label">Overdue</div><div class="stat-value red" id="sOverdue">—</div></div>
@@ -420,10 +420,10 @@
     <div class="search-bar">
       <input class="search-input" id="projectSearch" placeholder="Search job #, name, stage…" oninput="renderProjects()" />
       <div class="filter-chips">
-        <button class="fchip active" data-filter="all"       onclick="setProjectFilter('all')">All</button>
-        <button class="fchip"        data-filter="on-track"  onclick="setProjectFilter('on-track')">On Track</button>
-        <button class="fchip at-risk" data-filter="at-risk"  onclick="setProjectFilter('at-risk')">At Risk</button>
-        <button class="fchip needs"  data-filter="needs-attention" onclick="setProjectFilter('needs-attention')">Needs Attn</button>
+        <button class="fchip active"  data-filter="all"             onclick="setProjectFilter('all')">All</button>
+        <button class="fchip"         data-filter="identification"  onclick="setProjectFilter('identification')">Identification</button>
+        <button class="fchip at-risk" data-filter="selling-online"  onclick="setProjectFilter('selling-online')">Selling Online</button>
+        <button class="fchip needs"   data-filter="removal"         onclick="setProjectFilter('removal')">Removal</button>
       </div>
     </div>
     <div class="panel-body">
@@ -437,9 +437,9 @@
           <div class="form-group" style="max-width:160px">
             <label>Status</label>
             <select id="pStatus">
-              <option value="on-track">On Track</option>
-              <option value="at-risk">At Risk</option>
-              <option value="needs-attention">Needs Attention</option>
+              <option value="identification">Identification</option>
+              <option value="selling-online">Selling Online</option>
+              <option value="removal">Removal</option>
               <option value="complete">Complete</option>
             </select>
           </div>
@@ -629,8 +629,8 @@ function renderStats() {
   const c = state.confirmations || [];
   const now = Date.now();
   set('sActive',  p.filter(x => x.status !== 'complete').length);
-  set('sOnTrack', p.filter(x => x.status === 'on-track').length);
-  set('sAtRisk',  p.filter(x => x.status === 'at-risk' || x.status === 'needs-attention').length);
+  set('sOnTrack', p.filter(x => x.status === 'identification').length);
+  set('sAtRisk',  p.filter(x => x.status === 'selling-online').length);
   set('sPending', c.filter(x => !x.sent && x.idDateSet && (now - x.completedAt) < 864e5).length);
   set('sDone',    c.filter(x => x.sent).length);
   set('sOverdue', c.filter(x => !x.sent && x.idDateSet && (now - x.completedAt) >= 864e5).length);
@@ -719,9 +719,9 @@ function renderProjects() {
       ${contact ? `<div class="pc-contact">${contact}</div>` : ''}
       <div class="pc-actions">
         <select class="status-select" onchange="patchProject('${proj.id}', {status:this.value})">
-          <option value="on-track"        ${proj.status==='on-track'?'selected':''}>On Track</option>
-          <option value="at-risk"         ${proj.status==='at-risk'?'selected':''}>At Risk</option>
-          <option value="needs-attention" ${proj.status==='needs-attention'?'selected':''}>Needs Attention</option>
+          <option value="identification"  ${proj.status==='identification'?'selected':''}>Identification</option>
+          <option value="selling-online"  ${proj.status==='selling-online'?'selected':''}>Selling Online</option>
+          <option value="removal"         ${proj.status==='removal'?'selected':''}>Removal</option>
           <option value="complete"        ${proj.status==='complete'?'selected':''}>Complete</option>
         </select>
         <button class="ai-btn" onclick="aiSummary('${proj.id}')">✦ Summary</button>
@@ -1135,7 +1135,7 @@ function toggleForm(id) {
 }
 function set(id, val) { document.getElementById(id).textContent = val; }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function statusLabel(s) { return {  'on-track':'On Track','at-risk':'At Risk','needs-attention':'Needs Attention','complete':'Complete'}[s]||s; }
+function statusLabel(s) { return {'identification':'Identification','selling-online':'Selling Online','removal':'Removal','complete':'Complete'}[s]||s; }
 function fmtCurrency(v) { const n = parseFloat(v); if (!v || isNaN(n)) return ''; return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
 function fmtDate(ts) { return new Date(ts).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }
 function emptyState(icon, msg) { return `<div class="empty-state"><div class="icon">${icon}</div>${msg}<br><span style="opacity:.6">Use the button above to add one.</span></div>`; }

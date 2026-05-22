@@ -100,29 +100,29 @@ describe('normalizeLeader', () => {
 // ── stageToStatus ─────────────────────────────────────────────────
 
 describe('stageToStatus', () => {
-  test('returns on-track for empty/null input', () => {
-    expect(stageToStatus('')).toBe('on-track');
-    expect(stageToStatus(null)).toBe('on-track');
-    expect(stageToStatus(undefined)).toBe('on-track');
+  test('returns identification for empty/null input', () => {
+    expect(stageToStatus('')).toBe('identification');
+    expect(stageToStatus(null)).toBe('identification');
+    expect(stageToStatus(undefined)).toBe('identification');
   });
 
-  test('returns needs-attention for Reconciliation', () => {
-    expect(stageToStatus('Reconciliation')).toBe('needs-attention');
-    expect(stageToStatus('reconciliation phase')).toBe('needs-attention');
+  test('returns removal for Reconciliation', () => {
+    expect(stageToStatus('Reconciliation')).toBe('removal');
+    expect(stageToStatus('reconciliation phase')).toBe('removal');
   });
 
-  test('returns at-risk for active selling stages', () => {
-    expect(stageToStatus('Selling & Closing')).toBe('at-risk');
-    expect(stageToStatus('Selling Online')).toBe('at-risk');
-    expect(stageToStatus('Live show')).toBe('at-risk');
+  test('returns selling-online for active selling stages', () => {
+    expect(stageToStatus('Selling & Closing')).toBe('selling-online');
+    expect(stageToStatus('Selling Online')).toBe('selling-online');
+    expect(stageToStatus('Live show')).toBe('selling-online');
   });
 
-  test('returns on-track for all other stages', () => {
-    expect(stageToStatus('New Auction')).toBe('on-track');
-    expect(stageToStatus('Identification')).toBe('on-track');
-    expect(stageToStatus('Staffing')).toBe('on-track');
-    expect(stageToStatus('Quality Control')).toBe('on-track');
-    expect(stageToStatus('Onboarding')).toBe('on-track');
+  test('returns identification for all other stages', () => {
+    expect(stageToStatus('New Auction')).toBe('identification');
+    expect(stageToStatus('Identification')).toBe('identification');
+    expect(stageToStatus('Staffing')).toBe('identification');
+    expect(stageToStatus('Quality Control')).toBe('identification');
+    expect(stageToStatus('Onboarding')).toBe('identification');
   });
 });
 
