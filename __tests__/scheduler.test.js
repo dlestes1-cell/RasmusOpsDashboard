@@ -149,7 +149,7 @@ describe('runConfirmationCheck', () => {
 
   test('flags overdue confirmation (past 24h window)', () => {
     stateMocks.getConfirmations.mockReturnValue([
-      { id: '1', site: 'Overdue Site', sent: false, flagged: false, completedAt: Date.now() - WINDOW_MS - 5000 },
+      { id: '1', site: 'Overdue Site', sent: false, flagged: false, idDateSet: true, completedAt: Date.now() - WINDOW_MS - 5000 },
     ]);
     runConfirmationCheck();
     expect(stateMocks.updateConfirmation).toHaveBeenCalledWith('1', { flagged: true });
@@ -168,7 +168,7 @@ describe('runConfirmationCheck', () => {
   test('issues warning when within 3h of deadline', () => {
     const twoHoursLeft = Date.now() - WINDOW_MS + 2 * 3600 * 1000;
     stateMocks.getConfirmations.mockReturnValue([
-      { id: '2', site: 'Almost Due', sent: false, flagged: false, warnedAt: null, completedAt: twoHoursLeft },
+      { id: '2', site: 'Almost Due', sent: false, flagged: false, warnedAt: null, idDateSet: true, completedAt: twoHoursLeft },
     ]);
     runConfirmationCheck();
     expect(stateMocks.updateConfirmation).toHaveBeenCalledWith('2', expect.objectContaining({ warnedAt: expect.any(Number) }));

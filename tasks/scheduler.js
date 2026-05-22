@@ -364,6 +364,7 @@ function runConfirmationCheck() {
   let changed = false;
   getConfirmations().forEach(c => {
     if (c.sent) return;
+    if (!c.idDateSet || !c.completedAt) return;
     const left = WINDOW_MS - (ts - c.completedAt);
     if (left <= 0 && !c.flagged) {
       updateConfirmation(c.id, { flagged: true });
