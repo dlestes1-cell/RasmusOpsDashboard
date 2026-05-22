@@ -358,6 +358,36 @@
   .tab-btn:hover { color:var(--text-mid); }
   .tab-btn.active { color:var(--gold); border-bottom-color:var(--gold); }
 
+  /* ── Email Tracking Pane ─────────────────────────────────── */
+  #emailTrackingPane { display:none; flex-direction:column; flex:1; background:var(--surface); }
+  #emailTrackingPane.visible { display:flex; }
+  .et-section { border-bottom:1px solid var(--border); }
+  .et-section-hdr { padding:14px 24px; display:flex; align-items:center; gap:10px; background:var(--surface2); border-bottom:1px solid var(--border); }
+  .et-section-title { font-family:var(--serif); font-size:14px; color:var(--text); }
+  .et-section-count { font-family:var(--mono); font-size:9px; padding:3px 8px; border-radius:2px; text-transform:uppercase; letter-spacing:0.1em; }
+  .et-count-ok      { background:rgba(122,158,110,.12); color:var(--green); border:1px solid rgba(122,158,110,.3); }
+  .et-count-warn    { background:rgba(196,98,45,.12);   color:var(--red);   border:1px solid rgba(196,98,45,.3); }
+  .et-table { width:100%; border-collapse:collapse; }
+  .et-table th { padding:8px 16px; font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-dim); text-align:left; border-bottom:1px solid var(--border); background:var(--surface); white-space:nowrap; }
+  .et-table td { padding:11px 16px; font-size:12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  .et-table tr:last-child td { border-bottom:none; }
+  .et-table tr:hover td { background:var(--surface2); }
+  .et-table tr.et-sent td { opacity:.5; }
+  .et-job     { font-family:var(--mono); font-size:11px; color:var(--text-dim); white-space:nowrap; }
+  .et-name    { font-weight:600; color:var(--text); }
+  .et-leader  { font-family:var(--mono); font-size:11px; color:var(--text-mid); }
+  .et-window  { font-family:var(--mono); font-size:11px; white-space:nowrap; }
+  .et-window.overdue  { color:var(--red); font-weight:600; }
+  .et-window.warning  { color:var(--amber); }
+  .et-window.ok       { color:var(--green); }
+  .et-window.sent     { color:var(--text-dim); }
+  .et-actions { display:flex; gap:6px; white-space:nowrap; }
+  .et-sent-btn { background:var(--green); color:var(--bg); border:none; font-family:var(--mono); font-size:10px; padding:5px 11px; cursor:pointer; text-transform:uppercase; letter-spacing:0.08em; font-weight:500; transition:filter 0.2s; white-space:nowrap; }
+  .et-sent-btn:hover { filter:brightness(1.15); }
+  .et-dismiss-btn { background:none; border:1px solid var(--border); color:var(--text-dim); font-family:var(--mono); font-size:10px; padding:5px 9px; cursor:pointer; transition:all 0.2s; }
+  .et-dismiss-btn:hover { border-color:var(--red); color:var(--red); }
+  .et-empty { padding:28px 24px; font-family:var(--mono); font-size:11px; color:var(--text-dim); letter-spacing:0.05em; }
+
   /* ── Calendar Pane ───────────────────────────────────────── */
   #calendarPane { display:none; flex-direction:column; flex:1; background:var(--surface); }
   #calendarPane.visible { display:flex; }
@@ -477,6 +507,34 @@
   </div>
 </div>
 
+<!-- Email Tracking Pane -->
+<div id="emailTrackingPane">
+  <div style="padding:14px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface)">
+    <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:0.08em">Auto-detects emails FROM project leaders CC'd to you · scans every 30 min</span>
+    <button class="sync-btn" id="emailScanBtn" onclick="triggerEmailScan()">⟳ Scan Gmail Now</button>
+  </div>
+  <div class="et-section">
+    <div class="et-section-hdr">
+      <span class="dot" style="background:var(--blue)"></span>
+      <span class="et-section-title">Post-Identification Emails</span>
+      <span class="et-section-count" id="etIdCount"></span>
+    </div>
+    <div style="overflow-x:auto"><table class="et-table"><thead><tr>
+      <th>Job #</th><th>Name</th><th>Leader</th><th>ID Date</th><th>Status</th><th>Actions</th>
+    </tr></thead><tbody id="etIdBody"></tbody></table></div>
+  </div>
+  <div class="et-section">
+    <div class="et-section-hdr">
+      <span class="dot" style="background:var(--red)"></span>
+      <span class="et-section-title">Post-Removal Emails</span>
+      <span class="et-section-count" id="etRemovalCount"></span>
+    </div>
+    <div style="overflow-x:auto"><table class="et-table"><thead><tr>
+      <th>Job #</th><th>Name</th><th>Leader</th><th>Removal Date</th><th>Status</th><th>Actions</th>
+    </tr></thead><tbody id="etRemovalBody"></tbody></table></div>
+  </div>
+</div>
+
 <!-- Calendar Pane -->
 <div id="calendarPane">
   <div class="cal-header">
@@ -554,6 +612,7 @@
   <button class="tab-btn active" id="tabOps" onclick="switchTab('ops')">Field Operations</button>
   <button class="tab-btn" id="tabLeaders" onclick="switchTab('leaders')">Project Leaders</button>
   <button class="tab-btn" id="tabCal" onclick="switchTab('calendar')">Calendar</button>
+  <button class="tab-btn" id="tabEmail" onclick="switchTab('email')">Email Tracking</button>
 </div>
 
 <div id="auctionStrip">
@@ -775,7 +834,8 @@ function render() {
   renderProjects();
   renderPending();
   renderLeaderProjects();
-  if (document.getElementById('calendarPane').classList.contains('visible')) renderCalendar();
+  if (document.getElementById('calendarPane').classList.contains('visible'))      renderCalendar();
+  if (document.getElementById('emailTrackingPane').classList.contains('visible')) renderEmailTracking();
   if (drawerProjectId) {
     const p = (state.projects||[]).find(x => x.id === drawerProjectId);
     if (p) renderDrawerLog(p);
@@ -1118,15 +1178,19 @@ function switchTab(tab) {
   const ops     = document.getElementById('opsPane');
   const leaders = document.getElementById('leaderPane');
   const cal     = document.getElementById('calendarPane');
+  const email   = document.getElementById('emailTrackingPane');
   const pending = document.getElementById('pendingPane');
   document.getElementById('tabOps').classList.toggle('active',     tab === 'ops');
   document.getElementById('tabLeaders').classList.toggle('active', tab === 'leaders');
   document.getElementById('tabCal').classList.toggle('active',     tab === 'calendar');
-  ops.style.display    = tab === 'ops'      ? '' : 'none';
-  pending.style.display = tab === 'ops'     ? '' : 'none';
+  document.getElementById('tabEmail').classList.toggle('active',   tab === 'email');
+  ops.style.display     = tab === 'ops' ? '' : 'none';
+  pending.style.display = tab === 'ops' ? '' : 'none';
   leaders.classList.toggle('visible', tab === 'leaders');
   cal.classList.toggle('visible',     tab === 'calendar');
+  email.classList.toggle('visible',   tab === 'email');
   if (tab === 'calendar') renderCalendar();
+  if (tab === 'email')    renderEmailTracking();
 }
 
 // ── Calendar ──────────────────────────────────────────────────
@@ -1178,6 +1242,75 @@ function renderCalendar() {
   }
 
   document.getElementById('calDays').innerHTML = html;
+}
+
+// ── Email Tracking ────────────────────────────────────────────
+function renderEmailTracking() {
+  const entries = state.emailTracking || [];
+  const WINDOW  = 24 * 60 * 60 * 1000;
+  const now     = Date.now();
+
+  function windowLabel(e) {
+    if (e.sent) return { cls:'sent', text:`${e.autoDetected ? '⟳ ' : '✓ '}Sent ${new Date(e.sentAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}` };
+    const elapsed = now - e.triggeredAt;
+    if (elapsed > WINDOW) {
+      const h = Math.floor((elapsed - WINDOW) / 3600000);
+      return { cls:'overdue', text:`OVERDUE +${h}h` };
+    }
+    const remaining = WINDOW - elapsed;
+    const h = Math.floor(remaining / 3600000);
+    const m = Math.floor((remaining % 3600000) / 60000);
+    const cls = remaining < 3 * 3600000 ? 'warning' : 'ok';
+    return { cls, text:`${h}h ${m}m remaining` };
+  }
+
+  function buildRow(e) {
+    const w   = windowLabel(e);
+    const cls = e.sent ? 'et-sent' : '';
+    return `<tr class="${cls}">
+      <td class="et-job">${esc(e.jobNumber||'—')}</td>
+      <td class="et-name">${esc(e.name)}</td>
+      <td class="et-leader">${esc(e.leader||'—')}</td>
+      <td class="et-job">${e.triggeredAt ? new Date(e.triggeredAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '—'}</td>
+      <td class="et-window ${w.cls}">${w.text}</td>
+      <td class="et-actions">
+        ${!e.sent ? `<button class="et-sent-btn" onclick="markEmailSent('${e.id}')">✓ Mark Sent</button>` : ''}
+        <button class="et-dismiss-btn" onclick="dismissEmailEntry('${e.id}')">✕</button>
+      </td>
+    </tr>`;
+  }
+
+  const idEntries      = entries.filter(e => e.type === 'identification').sort((a,b) => (a.sent - b.sent) || a.triggeredAt - b.triggeredAt);
+  const removalEntries = entries.filter(e => e.type === 'removal').sort((a,b) => (a.sent - b.sent) || a.triggeredAt - b.triggeredAt);
+
+  const idOverdue = idEntries.filter(e => !e.sent && now - e.triggeredAt > WINDOW).length;
+  document.getElementById('etIdCount').textContent = `${idEntries.length} total${idOverdue ? ` · ${idOverdue} overdue` : ''}`;
+  document.getElementById('etIdCount').className   = `et-section-count ${idOverdue ? 'et-count-warn' : 'et-count-ok'}`;
+  document.getElementById('etIdBody').innerHTML    = idEntries.length ? idEntries.map(buildRow).join('') : `<tr><td colspan="6" class="et-empty">No identification emails tracked yet.</td></tr>`;
+
+  const remOverdue = removalEntries.filter(e => !e.sent && now - e.triggeredAt > WINDOW).length;
+  document.getElementById('etRemovalCount').textContent = `${removalEntries.length} total${remOverdue ? ` · ${remOverdue} overdue` : ''}`;
+  document.getElementById('etRemovalCount').className   = `et-section-count ${remOverdue ? 'et-count-warn' : 'et-count-ok'}`;
+  document.getElementById('etRemovalBody').innerHTML    = removalEntries.length ? removalEntries.map(buildRow).join('') : `<tr><td colspan="6" class="et-empty">No removal emails tracked yet.</td></tr>`;
+}
+
+async function triggerEmailScan() {
+  const btn = document.getElementById('emailScanBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin">⟳</span> Scanning…'; }
+  await fetch('/api/email-scan/trigger', { method: 'POST' });
+  if (btn) { btn.disabled = false; btn.innerHTML = '⟳ Scan Gmail Now'; }
+}
+
+async function markEmailSent(id) {
+  await fetch(`/api/email-tracking/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sent: true, sentAt: Date.now(), flagged: false })
+  });
+}
+
+async function dismissEmailEntry(id) {
+  await fetch(`/api/email-tracking/${id}`, { method: 'DELETE' });
 }
 
 // ── Leader Projects ───────────────────────────────────────────

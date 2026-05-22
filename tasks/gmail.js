@@ -42,6 +42,19 @@ async function searchMessages(query, maxResults = 5) {
   return data.messages || [];
 }
 
+async function getMessageMetadata(id) {
+  const token = await getAccessToken();
+  if (!token) return null;
+  const res  = await fetch(
+    `${GMAIL_API}/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const data = await res.json();
+  if (!data.payload) return null;
+  const hdr = name => (data.payload.headers || []).find(h => h.name === name)?.value || '';
+  return { from: hdr('From'), subject: hdr('Subject'), internalDate: Number(data.internalDate) };
+}
+
 async function sendEmail(to, subject, htmlBody) {
   const token = await getAccessToken();
   if (!token) { console.log('[GMAIL] No token — cannot send email'); return false; }
@@ -76,4 +89,4 @@ async function createDraft(to, subject, htmlBody) {
   return false;
 }
 
-module.exports = { getAccessToken, searchMessages, sendEmail, createDraft };
+module.exports = { getAccessToken, searchMessages, getMessageMetadata, sendEmail, createDraft };

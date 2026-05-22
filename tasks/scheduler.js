@@ -4,7 +4,8 @@ const gmail  = require('./gmail');
 const {
   getConfirmations, updateConfirmation, addConfirmation, deleteConfirmation, addAlert,
   getProjects, updateProject, setProjects,
-  getLeaderProjects, addLeaderProject, updateLeaderProject, deleteLeaderProject
+  getLeaderProjects, addLeaderProject, updateLeaderProject, deleteLeaderProject,
+  getEmailTracking, addEmailTracking, updateEmailTracking
 } = require('../state');
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
@@ -301,6 +302,7 @@ async function runHubSpotSync() {
         contactName:  contact.contactName  || '',
         contactPhone: contact.contactPhone || '',
         contactEmail: contact.contactEmail || '',
+        idEnteredAt:  p.hs_date_entered_249570210 ? new Date(p.hs_date_entered_249570210).getTime() : null,
         createdAt:    Date.now()
       };
     }).filter(Boolean);
@@ -310,6 +312,7 @@ async function runHubSpotSync() {
     setProjects(projects);
     syncLeaderProjects(deals);
     syncConfirmations(deals, contactMap);
+    syncEmailTracking(getProjects());
     addAlert({ type:'sync', message:`SYNC: HubSpot sync — ${projects.length} active deals at ${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}` });
     console.log(`[TASK] HubSpot: ${projects.length} projects loaded`);
     if (broadcast) broadcast();
@@ -558,6 +561,112 @@ function syncConfirmations(deals, contactMap) {
     });
 }
 
+// ── Email Tracking ────────────────────────────────────────────
+function syncEmailTracking(projects) {
+  const existing = getEmailTracking();
+  const byKey    = {};
+  existing.forEach(e => { byKey[`${e.type}:${e.hubspotId}`] = e; });
+
+  projects.forEach(p => {
+    if (!p.hubspotId) return;
+
+    // Post-Identification: any project that has entered the Identification stage
+    if (p.idEnteredAt) {
+      const key = `identification:${p.hubspotId}`;
+      if (!byKey[key]) {
+        addEmailTracking({ type:'identification', hubspotId:p.hubspotId, jobNumber:p.jobNumber, name:p.name, leader:p.leader||'', triggeredAt:p.idEnteredAt });
+      } else {
+        updateEmailTracking(byKey[key].id, { name:p.name, leader:p.leader||'' });
+      }
+    }
+
+    // Post-Removal: projects currently in reconciliation/removal stage
+    if (p.status === 'removal') {
+      const key = `removal:${p.hubspotId}`;
+      if (!byKey[key]) {
+        addEmailTracking({ type:'removal', hubspotId:p.hubspotId, jobNumber:p.jobNumber, name:p.name, leader:p.leader||'', triggeredAt:p.removalEnteredAt || Date.now() });
+      } else {
+        updateEmailTracking(byKey[key].id, { name:p.name, leader:p.leader||'' });
+      }
+    }
+  });
+}
+
+function runEmailTrackingCheck() {
+  const WINDOW = 24 * 60 * 60 * 1000;
+  const now    = Date.now();
+  getEmailTracking().forEach(e => {
+    if (e.sent || e.flagged) return;
+    if (now - e.triggeredAt > WINDOW) {
+      updateEmailTracking(e.id, { flagged: true });
+      addAlert({ type:'email-overdue', message:`OVERDUE: ${e.type === 'identification' ? 'Post-ID' : 'Post-Removal'} email not sent for ${e.name} — ${e.jobNumber || ''}`.trim() });
+    }
+  });
+}
+
+// ── Gmail scan for auto-detected leader emails ────────────────
+async function runEmailGmailScan() {
+  const hasGmail = process.env.GMAIL_REFRESH_TOKEN && process.env.GMAIL_CLIENT_ID;
+  if (!hasGmail) return;
+
+  const unsent = getEmailTracking().filter(e => !e.sent);
+  if (!unsent.length) { console.log('[EMAIL-SCAN] No unsent entries — skipping'); return; }
+
+  const leaderEntries = Object.entries(LEADER_EMAILS);
+  if (!leaderEntries.length) { console.log('[EMAIL-SCAN] No leader emails loaded — skipping'); return; }
+
+  // Search from earliest trigger date so we don't miss anything
+  const earliest  = Math.min(...unsent.map(e => e.triggeredAt));
+  const afterDate = (() => {
+    const d = new Date(earliest);
+    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+  })();
+
+  const fromQuery = leaderEntries.map(([, email]) => `from:${email}`).join(' OR ');
+  const query     = `(${fromQuery}) after:${afterDate}`;
+  console.log(`[EMAIL-SCAN] Searching Gmail: ${query}`);
+
+  const messages = await gmail.searchMessages(query, 100);
+  console.log(`[EMAIL-SCAN] Found ${messages.length} messages`);
+  if (!messages.length) return;
+
+  let matched = 0;
+  for (const msg of messages) {
+    const meta = await gmail.getMessageMetadata(msg.id);
+    if (!meta) continue;
+
+    // Identify which leader sent this
+    const leaderMatch = leaderEntries.find(([, email]) => meta.from.toLowerCase().includes(email.toLowerCase()));
+    if (!leaderMatch) continue;
+    const leaderName = leaderMatch[0];
+
+    // Determine type from subject phrase
+    const subjectLower = meta.subject.toLowerCase();
+    let type = null;
+    if (subjectLower.includes('identification complete')) type = 'identification';
+    else if (subjectLower.includes('removal complete'))   type = 'removal';
+    if (!type) continue;
+
+    // Match to the leader's open entry of this type closest to (but before) the email date
+    const candidates = unsent.filter(e =>
+      !e.sent &&
+      e.type === type &&
+      e.leader === leaderName &&
+      meta.internalDate >= e.triggeredAt
+    ).sort((a, b) => b.triggeredAt - a.triggeredAt); // most recent first
+
+    const entry = candidates[0] || null;
+
+    if (entry) {
+      updateEmailTracking(entry.id, { sent: true, sentAt: meta.internalDate, flagged: false, autoDetected: true });
+      console.log(`[EMAIL-SCAN] Auto-marked sent: ${leaderName} → ${jobNumber} (${entry.type}) at ${new Date(meta.internalDate).toLocaleString()}`);
+      matched++;
+    }
+  }
+  console.log(`[EMAIL-SCAN] Matched ${matched} of ${messages.length} messages`);
+  if (matched && broadcast) broadcast();
+}
+
 // ── Init ──────────────────────────────────────────────────────
 async function init(broadcastFn) {
   broadcast = broadcastFn;
@@ -570,14 +679,18 @@ async function init(broadcastFn) {
   cron.schedule('5 8 * * *',   () => runGmailSync());
   cron.schedule('10 8 * * *',  () => runDailyDigest());
   cron.schedule('15 8 * * *',  () => runOverdueDraft());
-  cron.schedule('*/5 * * * *', () => runConfirmationCheck());
+  cron.schedule('*/5 * * * *',  () => runConfirmationCheck());
+  cron.schedule('*/5 * * * *',  () => runEmailTrackingCheck());
+  cron.schedule('*/30 * * * *', () => runEmailGmailScan());
   cron.schedule('0 */6 * * *', () => runAIStatusScan());
 
   console.log('[CRON] Running startup sync…');
   await runHubSpotSync();
   runConfirmationCheck();
+  runEmailTrackingCheck();
+  runEmailGmailScan();
   runAIStatusScan();
   console.log('[CRON] All tasks active.');
 }
 
-module.exports = { init, runHubSpotSync, runDailyDigest, runOverdueDraft, normalizeLeader, stageToStatus, runConfirmationCheck, syncConfirmations };
+module.exports = { init, runHubSpotSync, runDailyDigest, runOverdueDraft, normalizeLeader, stageToStatus, runConfirmationCheck, syncConfirmations, syncEmailTracking, runEmailTrackingCheck, runEmailGmailScan };

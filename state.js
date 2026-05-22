@@ -32,7 +32,8 @@ let state = {
   ],
   confirmations: [],
   alerts: [],  // { id, type, message, projectId?, confirmationId?, ts }
-  leaderProjects: []  // { id, projectNumber, title, leader, startDate, removalDate, createdAt }
+  leaderProjects: [],  // { id, projectNumber, title, leader, startDate, removalDate, createdAt }
+  emailTracking: []   // { id, type:'identification'|'removal', hubspotId, jobNumber, name, leader, triggeredAt, sent, sentAt }
 };
 
 // ── Projects ─────────────────────────────────────────────────
@@ -55,8 +56,19 @@ function setProjects(incoming) {
   state.projects.forEach(p => { keep[p.id] = p; });
   state.projects = incoming.map(p => {
     const ex = keep[p.id];
-    if (!ex) return p;
-    return { ...p, contactName: p.contactName || ex.contactName || '', contactPhone: p.contactPhone || ex.contactPhone || '', contactEmail: p.contactEmail || ex.contactEmail || '', activityLog: ex.activityLog || [] };
+    if (!ex) return {
+      ...p,
+      removalEnteredAt: p.status === 'removal' ? Date.now() : null
+    };
+    return {
+      ...p,
+      contactName:      p.contactName  || ex.contactName  || '',
+      contactPhone:     p.contactPhone || ex.contactPhone || '',
+      contactEmail:     p.contactEmail || ex.contactEmail || '',
+      activityLog:      ex.activityLog || [],
+      summaryText:      ex.summaryText || p.summaryText   || '',
+      removalEnteredAt: ex.removalEnteredAt || (p.status === 'removal' ? Date.now() : null)
+    };
   });
 }
 
@@ -80,6 +92,16 @@ function updateLeaderProject(id, patch) {
 }
 function deleteLeaderProject(id)     { state.leaderProjects = state.leaderProjects.filter(p => p.id !== id); }
 
+// ── Email Tracking ────────────────────────────────────────────
+function getEmailTracking()       { return state.emailTracking; }
+function getEmailTrackingEntry(id){ return state.emailTracking.find(e => e.id === id); }
+function addEmailTracking(data)   { state.emailTracking.push({ id: uid(), sent: false, sentAt: null, ...data }); }
+function updateEmailTracking(id, patch) {
+  const i = state.emailTracking.findIndex(e => e.id === id);
+  if (i !== -1) state.emailTracking[i] = { ...state.emailTracking[i], ...patch };
+}
+function deleteEmailTracking(id)  { state.emailTracking = state.emailTracking.filter(e => e.id !== id); }
+
 // ── Alerts ────────────────────────────────────────────────────
 function getAlerts()    { return state.alerts; }
 function addAlert(alert) {
@@ -95,6 +117,7 @@ function getSnapshot() {
     confirmations:  state.confirmations,
     alerts:         state.alerts,
     leaderProjects: state.leaderProjects,
+    emailTracking:  state.emailTracking,
     serverTime:     now()
   };
 }
@@ -104,5 +127,6 @@ module.exports = {
   getConfirmations, getConfirmation, addConfirmation, updateConfirmation, deleteConfirmation,
   getLeaderProjects, getLeaderProject, addLeaderProject, updateLeaderProject, deleteLeaderProject,
   getAlerts, addAlert, clearAlert,
+  getEmailTracking, getEmailTrackingEntry, addEmailTracking, updateEmailTracking, deleteEmailTracking,
   getSnapshot
 };

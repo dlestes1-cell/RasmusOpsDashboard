@@ -5,6 +5,7 @@ const { WebSocketServer } = require('ws');
 const path      = require('path');
 
 const state     = require('./state');
+const { getEmailTracking, getEmailTrackingEntry, updateEmailTracking, deleteEmailTracking } = require('./state');
 const scheduler = require('./tasks/scheduler');
 const gmail     = require('./tasks/gmail');
 
@@ -60,9 +61,27 @@ app.post('/api/projects/:id/log', (req, res) => {
   res.json({ ok: true });
 });
 
-app.patch('/api/projects/:id', (req, res) => {
+app.patch('/api/projects/:id', async (req, res) => {
   state.updateProject(req.params.id, req.body);
   broadcast();
+
+  // Write close date back to HubSpot if the date field changed
+  if (req.body.date) {
+    const hsKey = process.env.HUBSPOT_API_KEY;
+    if (hsKey) {
+      try {
+        await fetch(`https://api.hubapi.com/crm/v3/objects/deals/${req.params.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hsKey}` },
+          body: JSON.stringify({ properties: { closedate: req.body.date + 'T00:00:00.000Z' } })
+        });
+        console.log(`[HUBSPOT] closedate updated for deal ${req.params.id}: ${req.body.date}`);
+      } catch (e) {
+        console.error('[HUBSPOT] closedate update failed:', e.message);
+      }
+    }
+  }
+
   res.json({ ok: true });
 });
 
@@ -129,6 +148,23 @@ app.patch('/api/leader-projects/:id', (req, res) => {
 
 app.delete('/api/leader-projects/:id', (req, res) => {
   state.deleteLeaderProject(req.params.id);
+  broadcast();
+  res.json({ ok: true });
+});
+
+// ── Email Tracking ────────────────────────────────────────────
+app.get('/api/email-tracking', (req, res) => {
+  res.json(getEmailTracking());
+});
+
+app.patch('/api/email-tracking/:id', (req, res) => {
+  updateEmailTracking(req.params.id, req.body);
+  broadcast();
+  res.json({ ok: true });
+});
+
+app.delete('/api/email-tracking/:id', (req, res) => {
+  deleteEmailTracking(req.params.id);
   broadcast();
   res.json({ ok: true });
 });
@@ -265,6 +301,16 @@ app.post('/api/digest/trigger', async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     console.error('[DIGEST] Error:', e.message, e.stack);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Manual email scan trigger ─────────────────────────────────
+app.post('/api/email-scan/trigger', async (req, res) => {
+  try {
+    await scheduler.runEmailGmailScan();
+    res.json({ ok: true });
+  } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
