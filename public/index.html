@@ -308,6 +308,8 @@
   /* ── Leader Project Cards ────────────────────────────────── */
   .lp-card { border:1px solid var(--border); background:var(--surface2); overflow:hidden; transition:border-color 0.2s; }
   .lp-card:hover { border-color:var(--gold-dim); }
+  .lp-card.no-removal { border-color:rgba(200,75,75,0.5); }
+  .lp-card.no-removal:hover { border-color:var(--red); }
   .lp-status-strip { height:4px; }
   .lp-status-strip.active    { background:var(--green); box-shadow:0 0 10px rgba(75,200,122,0.5); animation:pulse 2.5s ease-in-out infinite; }
   .lp-status-strip.scheduled { background:var(--amber); }
@@ -1135,12 +1137,13 @@ function renderLeaderProjects() {
 }
 
 function lpCard(p, today) {
-  const active = lpIsActive(p, today);
-  const cls    = active ? 'active' : 'scheduled';
-  const label  = active ? 'Active' : 'Scheduled';
-  const pct    = active ? lpProgress(p.startDate, p.removalDate) : 0;
+  const active      = lpIsActive(p, today);
+  const cls         = active ? 'active' : 'scheduled';
+  const label       = active ? 'Active' : 'Scheduled';
+  const pct         = active ? lpProgress(p.startDate, p.removalDate) : 0;
+  const noRemoval   = !p.removalDate && p.startDate && p.startDate < today;
   return `
-  <div class="lp-card" id="lpc-${p.id}">
+  <div class="lp-card${noRemoval ? ' no-removal' : ''}" id="lpc-${p.id}">
     <div class="lp-status-strip ${cls}"></div>
     <div class="lp-card-inner">
       <div class="lp-card-top">
