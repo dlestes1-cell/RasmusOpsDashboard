@@ -192,7 +192,7 @@ async function runHubSpotSync() {
 
   const requestBody = {
     limit: 200,
-    properties: ['dealname','dealstage','pipeline','closedate','createdate','description','amount','project_leader','hubspot_owner_id','hs_date_entered_249570210'],
+    properties: ['dealname','dealstage','pipeline','closedate','createdate','description','amount','marketing_projected_sales','project_leader','hubspot_owner_id','hs_date_entered_249570210'],
     sorts: [{ propertyName: 'closedate', direction: 'ASCENDING' }],
     filterGroups: [{ filters: [
       { propertyName: 'pipeline',   operator: 'EQ',     value: '147097136' },
@@ -297,7 +297,7 @@ async function runHubSpotSync() {
         stage,
         notes:        p.description || '',
         summaryText:  '',
-        amount:       p.amount || '',
+        amount:       p.marketing_projected_sales || p.amount || '',
         contactName:  contact.contactName  || '',
         contactPhone: contact.contactPhone || '',
         contactEmail: contact.contactEmail || '',
