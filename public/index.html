@@ -725,7 +725,6 @@ function renderProjects() {
           <option value="complete"        ${proj.status==='complete'?'selected':''}>Complete</option>
         </select>
         <button class="ai-btn" onclick="aiSummary('${proj.id}')">✦ Summary</button>
-        <button class="del-btn" onclick="deleteProject('${proj.id}')">✕</button>
       </div>
       ${proj.summaryText ? `<div class="ai-summary visible">${esc(proj.summaryText)}</div>` : ''}
       <div class="pc-log">
