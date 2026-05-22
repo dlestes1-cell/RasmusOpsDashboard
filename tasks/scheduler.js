@@ -221,7 +221,7 @@ async function runHubSpotSync() {
       data = JSON.parse(rawText);
     } catch (parseErr) {
       console.error('[DEBUG] Failed to parse response as JSON:', parseErr.message);
-      addAlert({ type:'error', message:`⚠ HubSpot sync failed: unparseable response (status ${res.status})` });
+      addAlert({ type:'error', message:`WARNING: HubSpot sync failed: unparseable response (status ${res.status})` });
       if (broadcast) broadcast();
       return;
     }
@@ -310,13 +310,13 @@ async function runHubSpotSync() {
     setProjects(projects);
     syncLeaderProjects(deals);
     syncConfirmations(deals, contactMap);
-    addAlert({ type:'sync', message:`🔄 HubSpot sync — ${projects.length} active deals at ${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}` });
+    addAlert({ type:'sync', message:`SYNC: HubSpot sync — ${projects.length} active deals at ${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}` });
     console.log(`[TASK] HubSpot: ${projects.length} projects loaded`);
     if (broadcast) broadcast();
   } catch (e) {
     console.error('[TASK] HubSpot error:', e.message);
     console.error('[TASK] HubSpot error stack:', e.stack);
-    addAlert({ type:'error', message:`⚠ HubSpot sync failed: ${e.message}` });
+    addAlert({ type:'error', message:`WARNING: HubSpot sync failed: ${e.message}` });
     if (broadcast) broadcast();
   }
 }
@@ -337,7 +337,7 @@ async function runGmailSync() {
       );
       if (sentMsgs.length > 0) {
         updateConfirmation(c.id, { sent: true });
-        addAlert({ type:'confirmed', confirmationId:c.id, message:`✅ Gmail: Confirmation sent for "${c.site}" — auto-marked.` });
+        addAlert({ type:'confirmed', confirmationId:c.id, message:`CONFIRMED: Gmail confirmation sent for "${c.site}" — auto-marked.` });
         console.log(`[TASK] Gmail auto-confirmed: ${c.site}`);
       } else if (c.recipient) {
         // Check for client reply
@@ -346,7 +346,7 @@ async function runGmailSync() {
         );
         if (replyMsgs.length > 0) {
           updateConfirmation(c.id, { replied: true });
-          addAlert({ type:'reply', confirmationId:c.id, message:`📬 "${c.site}" — client replied. Check inbox.` });
+          addAlert({ type:'reply', confirmationId:c.id, message:`REPLY: "${c.site}" — client replied. Check inbox.` });
           console.log(`[TASK] Gmail reply detected: ${c.site}`);
         }
       }
@@ -368,11 +368,11 @@ function runConfirmationCheck() {
     const left = WINDOW_MS - (ts - c.completedAt);
     if (left <= 0 && !c.flagged) {
       updateConfirmation(c.id, { flagged: true });
-      addAlert({ type:'overdue', confirmationId:c.id, message:`⚠ OVERDUE: "${c.site}" passed 24-hour window.` });
+      addAlert({ type:'overdue', confirmationId:c.id, message:`OVERDUE: "${c.site}" passed 24-hour window.` });
       changed = true;
     } else if (left > 0 && left <= 3*3600000 && !c.warnedAt) {
       updateConfirmation(c.id, { warnedAt: ts });
-      addAlert({ type:'warning', confirmationId:c.id, message:`⏱ URGENT: "${c.site}" due in ${Math.ceil(left/3600000)}h.` });
+      addAlert({ type:'warning', confirmationId:c.id, message:`URGENT: "${c.site}" due in ${Math.ceil(left/3600000)}h.` });
       changed = true;
     }
   });
@@ -441,8 +441,8 @@ async function runDailyDigest() {
       : '<tr><td colspan="3" style="padding:4px 0;color:#999;font-size:12px">No auctions this week</td></tr>';
 
     const overdueSection = overdue.length
-      ? `<h3 style="font-family:monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#c84b4b;margin:24px 0 8px">⚠ Overdue Confirmations (${overdue.length})</h3>
-         <ul style="margin:0;padding:0 0 0 18px">${overdue.map(c=>`<li style="font-size:12px;margin-bottom:4px">${c.site}${c.recipient?' — '+c.recipient:''}</li>`).join('')}</ul>` : '';
+      ? `<h3 style="font-family:monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#c84b4b;margin:24px 0 8px">WARNING: Overdue Confirmations (${overdue.length})</h3>
+         <ul style="margin:0;padding:0 0 0 18px">${overdue.map(c=>`<li style="font-size:12px;margin-bottom:4px">${c.site}${c.recipient?' &mdash; '+c.recipient:''}</li>`).join('')}</ul>` : '';
 
     const html = `<!DOCTYPE html><html><body style="background:#f9f8f5;margin:0;padding:24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a">
 <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid #e5e3db;padding:28px">
@@ -453,7 +453,7 @@ async function runDailyDigest() {
   <h3 style="font-family:monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#888;margin:0 0 8px">Your Active Jobs</h3>
   <table style="width:100%;border-collapse:collapse;margin-bottom:24px">${jobRows}</table>
 
-  <h3 style="font-family:monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#888;margin:0 0 8px">⚑ Auctions This Week</h3>
+  <h3 style="font-family:monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#888;margin:0 0 8px">Auctions This Week</h3>
   <table style="width:100%;border-collapse:collapse;margin-bottom:24px">${upcomingRows}</table>
 
   ${overdueSection}
@@ -462,7 +462,7 @@ async function runDailyDigest() {
 </div></body></html>`;
 
     console.log(`[DIGEST] Sending to ${leader} at ${email}`);
-    const result = await gmail.sendEmail(email, `Field Ops Digest — ${dateLabel}`, html);
+    const result = await gmail.sendEmail(email, `Field Ops Digest - ${dateLabel}`, html);
     if (result.ok) sentTo.add(leader);
   }
 
@@ -491,8 +491,8 @@ async function runOverdueDraft() {
   const html = `<!DOCTYPE html><html><body style="font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;margin:0;padding:24px;background:#f9f8f5">
 <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid #e5e3db;padding:28px">
   <p style="font-family:monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.15em;color:#999;margin:0 0 4px">Rasmus Auctions · Field Operations</p>
-  <h1 style="font-size:20px;font-weight:700;margin:0 0 2px;color:#c84b4b">⚠ Overdue Site Confirmations</h1>
-  <p style="color:#666;font-size:13px;margin:0 0 24px">${dateLabel} — ${overdue.length} confirmation${overdue.length !== 1 ? 's' : ''} past the 24-hour window</p>
+  <h1 style="font-size:20px;font-weight:700;margin:0 0 2px;color:#c84b4b">Overdue Site Confirmations</h1>
+  <p style="color:#666;font-size:13px;margin:0 0 24px">${dateLabel} &mdash; ${overdue.length} confirmation${overdue.length !== 1 ? 's' : ''} past the 24-hour window</p>
   <table style="width:100%;border-collapse:collapse;border-top:2px solid #e5e3db">
     <thead><tr>
       <th style="text-align:left;padding:6px 16px 6px 0;font-family:monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:#999">Site</th>
@@ -504,7 +504,7 @@ async function runOverdueDraft() {
   <p style="margin:24px 0 0;font-size:11px;color:#aaa;font-family:monospace">Rasmus Field Operations Dashboard · Auto-generated at 8:15 AM</p>
 </div></body></html>`;
 
-  const ok = await gmail.createDraft('destes@rasmus.com', `⚠ ${overdue.length} Overdue Confirmation${overdue.length !== 1 ? 's' : ''} — ${dateLabel}`, html);
+  const ok = await gmail.createDraft('destes@rasmus.com', `OVERDUE: ${overdue.length} Confirmation${overdue.length !== 1 ? 's' : ''} Past Due - ${dateLabel}`, html);
   if (ok) console.log(`[OVERDUE] Draft created: ${overdue.length} overdue items`);
 }
 

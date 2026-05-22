@@ -46,7 +46,7 @@ async function sendEmail(to, subject, htmlBody) {
   const token = await getAccessToken();
   if (!token) { console.log('[GMAIL] No token — cannot send email'); return false; }
   const raw = Buffer.from(
-    `To: ${to}\r\nSubject: ${subject}\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=utf-8\r\n\r\n${htmlBody}`
+    `To: ${to}\r\nSubject: ${subject}\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n${htmlBody}`
   ).toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
   const res = await fetch(`${GMAIL_API}/users/me/messages/send`, {
     method: 'POST',
@@ -63,7 +63,7 @@ async function createDraft(to, subject, htmlBody) {
   const token = await getAccessToken();
   if (!token) { console.log('[GMAIL] No token — cannot create draft'); return false; }
   const raw = Buffer.from(
-    `To: ${to}\r\nSubject: ${subject}\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=utf-8\r\n\r\n${htmlBody}`
+    `To: ${to}\r\nSubject: ${subject}\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n${htmlBody}`
   ).toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
   const res  = await fetch(`${GMAIL_API}/users/me/drafts`, {
     method: 'POST',
