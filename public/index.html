@@ -282,6 +282,33 @@
   .tab-btn:hover { color:var(--text-mid); }
   .tab-btn.active { color:var(--gold); border-bottom-color:var(--gold); }
 
+  /* ── Calendar Pane ───────────────────────────────────────── */
+  #calendarPane { display:none; flex-direction:column; flex:1; background:var(--surface); }
+  #calendarPane.visible { display:flex; }
+  .cal-header { padding:16px 24px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .cal-nav { display:flex; align-items:center; gap:16px; }
+  .cal-nav-btn { background:none; border:1px solid var(--border); color:var(--text-mid); font-family:var(--mono); font-size:13px; width:30px; height:30px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.15s; }
+  .cal-nav-btn:hover { border-color:var(--gold); color:var(--gold); }
+  .cal-month-label { font-family:var(--mono); font-size:13px; color:var(--text); letter-spacing:0.08em; min-width:140px; text-align:center; }
+  .cal-legend { display:flex; gap:14px; }
+  .cal-legend-item { display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:9px; color:var(--text-dim); letter-spacing:0.08em; text-transform:uppercase; }
+  .cal-legend-dot { width:8px; height:8px; border-radius:2px; }
+  .cal-grid-wrap { flex:1; overflow-y:auto; padding:16px 24px; }
+  .cal-dow-row { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-bottom:4px; }
+  .cal-dow { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-dim); text-align:center; padding:4px 0; }
+  .cal-days { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .cal-day { min-height:90px; background:var(--surface2); border:1px solid var(--border); padding:6px; display:flex; flex-direction:column; gap:3px; }
+  .cal-day.other-month { opacity:0.35; }
+  .cal-day.today { border-color:var(--gold); }
+  .cal-day-num { font-family:var(--mono); font-size:10px; color:var(--text-dim); margin-bottom:2px; }
+  .cal-day.today .cal-day-num { color:var(--gold); font-weight:600; }
+  .cal-job-pill { font-family:var(--mono); font-size:9px; padding:2px 6px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-radius:2px; transition:opacity 0.15s; line-height:1.4; }
+  .cal-job-pill:hover { opacity:0.8; }
+  .cal-job-pill.identification { background:rgba(110,142,160,0.25); color:#9ab8ca; border-left:2px solid #6E8EA0; }
+  .cal-job-pill.selling-online { background:rgba(196,154,45,0.25); color:#d4aa3d; border-left:2px solid #C49A2D; }
+  .cal-job-pill.removal { background:rgba(196,98,45,0.25); color:#d4823e; border-left:2px solid #C4622D; }
+  .cal-job-pill.complete { background:rgba(122,158,110,0.2); color:#7A9E6E; border-left:2px solid #7A9E6E; }
+
   /* ── Leader Pane ─────────────────────────────────────────── */
   #leaderPane { display:none; flex-direction:column; flex:1; }
   #leaderPane.visible { display:flex; }
@@ -374,6 +401,31 @@
   </div>
 </div>
 
+<!-- Calendar Pane -->
+<div id="calendarPane">
+  <div class="cal-header">
+    <div class="cal-nav">
+      <button class="cal-nav-btn" onclick="calNav(-1)">&#8249;</button>
+      <div class="cal-month-label" id="calMonthLabel">—</div>
+      <button class="cal-nav-btn" onclick="calNav(1)">&#8250;</button>
+    </div>
+    <div class="cal-legend">
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#6E8EA0"></div>Identification</div>
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#C49A2D"></div>Selling Online</div>
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#C4622D"></div>Removal</div>
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#7A9E6E"></div>Complete</div>
+    </div>
+  </div>
+  <div class="cal-grid-wrap">
+    <div class="cal-dow-row">
+      <div class="cal-dow">Sun</div><div class="cal-dow">Mon</div><div class="cal-dow">Tue</div>
+      <div class="cal-dow">Wed</div><div class="cal-dow">Thu</div><div class="cal-dow">Fri</div>
+      <div class="cal-dow">Sat</div>
+    </div>
+    <div class="cal-days" id="calDays"></div>
+  </div>
+</div>
+
 <!-- Draft Modal -->
 <div class="modal-overlay" id="draftModal">
   <div class="modal-inner">
@@ -425,6 +477,7 @@
 <div class="tab-bar">
   <button class="tab-btn active" id="tabOps" onclick="switchTab('ops')">Field Operations</button>
   <button class="tab-btn" id="tabLeaders" onclick="switchTab('leaders')">Project Leaders</button>
+  <button class="tab-btn" id="tabCal" onclick="switchTab('calendar')">Calendar</button>
 </div>
 
 <div id="auctionStrip">
@@ -646,6 +699,7 @@ function render() {
   renderProjects();
   renderPending();
   renderLeaderProjects();
+  if (document.getElementById('calendarPane').classList.contains('visible')) renderCalendar();
   if (drawerProjectId) {
     const p = (state.projects||[]).find(x => x.id === drawerProjectId);
     if (p) renderDrawerLog(p);
@@ -987,19 +1041,67 @@ async function sendConfirmation(id, btnOverride) {
 function switchTab(tab) {
   const ops     = document.getElementById('opsPane');
   const leaders = document.getElementById('leaderPane');
-  const btnOps  = document.getElementById('tabOps');
-  const btnLdr  = document.getElementById('tabLeaders');
-  if (tab === 'ops') {
-    ops.style.display = '';
-    leaders.classList.remove('visible');
-    btnOps.classList.add('active');
-    btnLdr.classList.remove('active');
-  } else {
-    ops.style.display = 'none';
-    leaders.classList.add('visible');
-    btnLdr.classList.add('active');
-    btnOps.classList.remove('active');
+  const cal     = document.getElementById('calendarPane');
+  const pending = document.getElementById('pendingPane');
+  document.getElementById('tabOps').classList.toggle('active',     tab === 'ops');
+  document.getElementById('tabLeaders').classList.toggle('active', tab === 'leaders');
+  document.getElementById('tabCal').classList.toggle('active',     tab === 'calendar');
+  ops.style.display    = tab === 'ops'      ? '' : 'none';
+  pending.style.display = tab === 'ops'     ? '' : 'none';
+  leaders.classList.toggle('visible', tab === 'leaders');
+  cal.classList.toggle('visible',     tab === 'calendar');
+  if (tab === 'calendar') renderCalendar();
+}
+
+// ── Calendar ──────────────────────────────────────────────────
+let calYear  = new Date().getFullYear();
+let calMonth = new Date().getMonth(); // 0-indexed
+
+function calNav(dir) {
+  calMonth += dir;
+  if (calMonth > 11) { calMonth = 0;  calYear++; }
+  if (calMonth < 0)  { calMonth = 11; calYear--; }
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('calMonthLabel').textContent = `${MONTHS[calMonth]} ${calYear}`;
+
+  const projects = state.projects || [];
+  // Build a map of YYYY-MM-DD → [projects]
+  const byDate = {};
+  projects.forEach(p => {
+    if (!p.date) return;
+    if (!byDate[p.date]) byDate[p.date] = [];
+    byDate[p.date].push(p);
+  });
+
+  const today    = new Date(); today.setHours(0,0,0,0);
+  const firstDay = new Date(calYear, calMonth, 1);
+  const lastDay  = new Date(calYear, calMonth + 1, 0);
+  const startDow = firstDay.getDay(); // 0=Sun
+  const totalCells = Math.ceil((startDow + lastDay.getDate()) / 7) * 7;
+
+  let html = '';
+  for (let i = 0; i < totalCells; i++) {
+    const dayOffset = i - startDow;
+    const date      = new Date(calYear, calMonth, 1 + dayOffset);
+    const isOther   = date.getMonth() !== calMonth;
+    const isToday   = date.getTime() === today.getTime();
+    const dateStr   = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+    const jobs      = byDate[dateStr] || [];
+
+    html += `<div class="cal-day${isOther ? ' other-month' : ''}${isToday ? ' today' : ''}">`;
+    html += `<div class="cal-day-num">${date.getDate()}</div>`;
+    jobs.forEach(p => {
+      const label = (p.jobNumber ? p.jobNumber + ' ' : '') + p.name;
+      html += `<div class="cal-job-pill ${p.status}" onclick="openJobDrawer('${p.id}')" title="${esc(p.name)}">${esc(label)}</div>`;
+    });
+    html += `</div>`;
   }
+
+  document.getElementById('calDays').innerHTML = html;
 }
 
 // ── Leader Projects ───────────────────────────────────────────
