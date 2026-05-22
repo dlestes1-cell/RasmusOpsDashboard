@@ -155,15 +155,21 @@ app.post('/api/ai/summary', async (req, res) => {
         max_tokens: 200,
         messages: [{
           role: 'user',
-          content: `You are an assistant for Rasmus Auctions field operations. Write a concise 2-sentence operational status note for this project.
+          content: (() => {
+            const recentLog = (p.activityLog || []).slice(0, 3)
+              .map((e, i) => `${i + 1}. ${new Date(e.ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: ${e.text}`)
+              .join('\n');
+            return `You are an assistant for Rasmus Auctions field operations. Write a concise 2-sentence operational status note for this project. Incorporate the most recent field activity if relevant.
 
 Project: ${p.name}
 Location: ${p.location}
 Auction Date: ${p.date || 'TBD'}
-Status: ${p.status}
+Stage: ${p.stage || p.status}
 Notes: ${p.notes || 'None'}
+${recentLog ? `\nRecent Field Activity:\n${recentLog}` : ''}
 
-Write only the 2-sentence note, no preamble.`
+Write only the 2-sentence note, no preamble.`;
+          })()
         }]
       })
     });
