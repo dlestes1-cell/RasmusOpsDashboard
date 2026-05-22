@@ -873,7 +873,7 @@ function renderProjects() {
       <span class="pr-name">${esc(proj.name)}</span>
       <span class="status-badge ${proj.status}" style="flex-shrink:0">${statusLabel(proj.status)}</span>
       <span class="pr-val">${fmtCurrency(proj.amount)}</span>
-      <span class="pr-date">${proj.date||'—'}</span>
+      <span class="pr-date">${fmtDateShort(proj.date)}</span>
       <div class="pr-actions" onclick="event.stopPropagation()">
         <button class="ai-btn" onclick="aiSummary('${proj.id}')">✦</button>
       </div>
@@ -899,7 +899,7 @@ function renderProjects() {
       ${latestActivity ? `<div style="margin-top:6px;padding-top:5px;border-top:1px solid var(--border);font-size:10px;color:var(--text-dim);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="color:var(--gold-bright);margin-right:4px">↳</span>${esc(latestActivity.text)}</div>` : ''}
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
-      <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim)">${proj.date||'No date'}</span>
+      <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim)">${proj.date ? fmtDateShort(proj.date) : 'No date'}</span>
       <button class="ai-btn" style="padding:3px 8px;font-size:9px" onclick="event.stopPropagation();aiSummary('${proj.id}')" title="${proj.summaryText ? 'Refresh summary' : 'Generate summary'}">✦</button>
     </div>
   </div>`; }).join('');
@@ -1279,7 +1279,8 @@ function fmtDateShort(iso) {
   if (!iso) return '—';
   const [y, m, d] = iso.split('-');
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${months[+m-1]} ${+d}, ${y}`;
+  const year = +y === new Date().getFullYear() ? '' : `, ${y}`;
+  return `${months[+m-1]} ${+d}${year}`;
 }
 
 const LP_LEADERS = [
@@ -1416,7 +1417,7 @@ function openJobDrawer(projectId) {
   drawerProjectId = projectId;
 
   document.getElementById('drawerJobTitle').textContent = p.jobNumber ? `${p.jobNumber} — ${p.name}` : p.name;
-  document.getElementById('drawerJobSub').textContent   = [p.stage, p.date ? '📅 ' + p.date : ''].filter(Boolean).join('  ·  ');
+  document.getElementById('drawerJobSub').textContent   = [p.stage, p.date ? '📅 ' + fmtDateShort(p.date) : ''].filter(Boolean).join('  ·  ');
   document.getElementById('drawerStatus').innerHTML     = `<span class="status-badge ${p.status}">${statusLabel(p.status)}</span>`;
   document.getElementById('drawerValuation').textContent = fmtCurrency(p.amount) || '—';
   document.getElementById('drawerNotes').textContent    = p.notes || '—';
