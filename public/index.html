@@ -751,6 +751,24 @@ function renderProjects() {
 
   // ── Grid view ────────────────────────────────────────────────
   el.className = 'grid-view';
+  el.innerHTML = p.map(proj => `
+  <div class="project-card" id="pc-${proj.id}" onclick="openJobDrawer('${proj.id}')" style="display:flex;flex-direction:column;justify-content:space-between;cursor:pointer">
+    <div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim)">${esc(proj.jobNumber||'—')}</span>
+        <span class="status-badge ${proj.status}">${statusLabel(proj.status)}</span>
+        ${proj.amount ? `<span style="font-family:var(--mono);font-size:10px;color:var(--gold)">${fmtCurrency(proj.amount)}</span>` : ''}
+      </div>
+      <div style="font-size:13px;font-weight:600;color:var(--text);line-height:1.3;margin-bottom:6px">${esc(proj.name)}</div>
+      ${proj.notes ? `<div style="font-size:11px;color:var(--text-dim);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical">${esc(proj.notes)}</div>` : ''}
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+      <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim)">${proj.date||'No date'}</span>
+      <button class="ai-btn" style="padding:3px 8px;font-size:9px" onclick="event.stopPropagation();aiSummary('${proj.id}')">✦</button>
+    </div>
+  </div>`).join('');
+  return;
+
   el.innerHTML = p.map(proj => {
     const contact = [
       proj.contactName  ? `<span class="pc-contact-item"><span class="pc-contact-lbl">Contact</span> ${esc(proj.contactName)}</span>` : '',
