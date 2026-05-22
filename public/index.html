@@ -16,7 +16,11 @@
     --serif: 'Playfair Display', serif;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:var(--bg); color:var(--text); font-family:var(--sans); min-height:100vh; display:flex; flex-direction:column; }
+  body { background:var(--bg); color:var(--text); font-family:var(--sans); height:100vh; overflow:hidden; display:flex; flex-direction:column; }
+  #tabContent { flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:column; }
+  #opsContent { flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:column; }
+  main#opsPane { flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:column; }
+  main#opsPane > .panel { flex:1; min-height:0; }
 
   /* Header */
   header { border-bottom:1px solid #0a0908; padding:14px 28px; display:flex; align-items:center; justify-content:space-between; background:#141210; box-shadow:0 1px 4px rgba(0,0,0,0.5); }
@@ -359,7 +363,7 @@
   .tab-btn.active { color:var(--gold); border-bottom-color:var(--gold); }
 
   /* ── Email Tracking Pane ─────────────────────────────────── */
-  #emailTrackingPane { display:none; flex-direction:column; flex:1; background:var(--surface); }
+  #emailTrackingPane { display:none; flex-direction:column; flex:1; min-height:0; overflow-y:auto; background:var(--surface); }
   #emailTrackingPane.visible { display:flex; }
   .et-section { border-bottom:1px solid var(--border); }
   .et-section-hdr { padding:14px 24px; display:flex; align-items:center; gap:10px; background:var(--surface2); border-bottom:1px solid var(--border); }
@@ -389,7 +393,7 @@
   .et-empty { padding:28px 24px; font-family:var(--mono); font-size:11px; color:var(--text-dim); letter-spacing:0.05em; }
 
   /* ── Calendar Pane ───────────────────────────────────────── */
-  #calendarPane { display:none; flex-direction:column; flex:1; background:var(--surface); }
+  #calendarPane { display:none; flex-direction:column; flex:1; min-height:0; overflow-y:auto; background:var(--surface); }
   #calendarPane.visible { display:flex; }
   .cal-header { padding:16px 24px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
   .cal-nav { display:flex; align-items:center; gap:16px; }
@@ -416,7 +420,7 @@
   .cal-job-pill.complete { background:rgba(122,158,110,0.2); color:#7A9E6E; border-left:2px solid #7A9E6E; }
 
   /* ── Leader Pane ─────────────────────────────────────────── */
-  #leaderPane { display:none; flex-direction:column; flex:1; }
+  #leaderPane { display:none; flex-direction:column; flex:1; min-height:0; overflow-y:auto; }
   #leaderPane.visible { display:flex; }
   .lp-panel { background:var(--surface); display:flex; flex-direction:column; flex:1; }
   .lp-panel-header { padding:18px 24px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; background:var(--surface); }
@@ -507,59 +511,6 @@
   </div>
 </div>
 
-<!-- Email Tracking Pane -->
-<div id="emailTrackingPane">
-  <div style="padding:14px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface)">
-    <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:0.08em">Auto-detects emails FROM project leaders CC'd to you · scans every 30 min</span>
-    <button class="sync-btn" id="emailScanBtn" onclick="triggerEmailScan()">⟳ Scan Gmail Now</button>
-  </div>
-  <div class="et-section">
-    <div class="et-section-hdr">
-      <span class="dot" style="background:var(--blue)"></span>
-      <span class="et-section-title">Post-Identification Emails</span>
-      <span class="et-section-count" id="etIdCount"></span>
-    </div>
-    <div style="overflow-x:auto"><table class="et-table"><thead><tr>
-      <th>Job #</th><th>Name</th><th>Leader</th><th>ID Date</th><th>Status</th><th>Actions</th>
-    </tr></thead><tbody id="etIdBody"></tbody></table></div>
-  </div>
-  <div class="et-section">
-    <div class="et-section-hdr">
-      <span class="dot" style="background:var(--red)"></span>
-      <span class="et-section-title">Post-Removal Emails</span>
-      <span class="et-section-count" id="etRemovalCount"></span>
-    </div>
-    <div style="overflow-x:auto"><table class="et-table"><thead><tr>
-      <th>Job #</th><th>Name</th><th>Leader</th><th>Removal Date</th><th>Status</th><th>Actions</th>
-    </tr></thead><tbody id="etRemovalBody"></tbody></table></div>
-  </div>
-</div>
-
-<!-- Calendar Pane -->
-<div id="calendarPane">
-  <div class="cal-header">
-    <div class="cal-nav">
-      <button class="cal-nav-btn" onclick="calNav(-1)">&#8249;</button>
-      <div class="cal-month-label" id="calMonthLabel">—</div>
-      <button class="cal-nav-btn" onclick="calNav(1)">&#8250;</button>
-    </div>
-    <div class="cal-legend">
-      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#6E8EA0"></div>Identification</div>
-      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#C49A2D"></div>Selling Online</div>
-      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#C4622D"></div>Removal</div>
-      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#7A9E6E"></div>Complete</div>
-    </div>
-  </div>
-  <div class="cal-grid-wrap">
-    <div class="cal-dow-row">
-      <div class="cal-dow">Sun</div><div class="cal-dow">Mon</div><div class="cal-dow">Tue</div>
-      <div class="cal-dow">Wed</div><div class="cal-dow">Thu</div><div class="cal-dow">Fri</div>
-      <div class="cal-dow">Sat</div>
-    </div>
-    <div class="cal-days" id="calDays"></div>
-  </div>
-</div>
-
 <!-- Draft Modal -->
 <div class="modal-overlay" id="draftModal">
   <div class="modal-inner">
@@ -615,6 +566,8 @@
   <button class="tab-btn" id="tabEmail" onclick="switchTab('email')">Email Tracking</button>
 </div>
 
+<div id="tabContent">
+<div id="opsContent">
 <div id="auctionStrip">
   <span class="auction-strip-label">⚑ This Week</span>
   <div id="auctionPills" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
@@ -701,6 +654,8 @@
   </div>
 </div>
 
+</div><!-- /opsContent -->
+
 <!-- Project Leaders Pane -->
 <div id="leaderPane">
   <div class="lp-panel">
@@ -751,6 +706,61 @@
     <div class="lp-body" id="leaderProjectList"></div>
   </div>
 </div>
+
+<!-- Calendar Pane -->
+<div id="calendarPane">
+  <div class="cal-header">
+    <div class="cal-nav">
+      <button class="cal-nav-btn" onclick="calNav(-1)">&#8249;</button>
+      <div class="cal-month-label" id="calMonthLabel">—</div>
+      <button class="cal-nav-btn" onclick="calNav(1)">&#8250;</button>
+    </div>
+    <div class="cal-legend">
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#6E8EA0"></div>Identification</div>
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#C49A2D"></div>Selling Online</div>
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#C4622D"></div>Removal</div>
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#7A9E6E"></div>Complete</div>
+    </div>
+  </div>
+  <div class="cal-grid-wrap">
+    <div class="cal-dow-row">
+      <div class="cal-dow">Sun</div><div class="cal-dow">Mon</div><div class="cal-dow">Tue</div>
+      <div class="cal-dow">Wed</div><div class="cal-dow">Thu</div><div class="cal-dow">Fri</div>
+      <div class="cal-dow">Sat</div>
+    </div>
+    <div class="cal-days" id="calDays"></div>
+  </div>
+</div>
+
+<!-- Email Tracking Pane -->
+<div id="emailTrackingPane">
+  <div style="padding:14px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface)">
+    <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:0.08em">Auto-detects emails FROM project leaders CC'd to you · scans every 30 min</span>
+    <button class="sync-btn" id="emailScanBtn" onclick="triggerEmailScan()">⟳ Scan Gmail Now</button>
+  </div>
+  <div class="et-section">
+    <div class="et-section-hdr">
+      <span class="dot" style="background:var(--blue)"></span>
+      <span class="et-section-title">Post-Identification Emails</span>
+      <span class="et-section-count" id="etIdCount"></span>
+    </div>
+    <div style="overflow-x:auto"><table class="et-table"><thead><tr>
+      <th>Job #</th><th>Name</th><th>Leader</th><th>ID Date</th><th>Status</th><th>Actions</th>
+    </tr></thead><tbody id="etIdBody"></tbody></table></div>
+  </div>
+  <div class="et-section">
+    <div class="et-section-hdr">
+      <span class="dot" style="background:var(--red)"></span>
+      <span class="et-section-title">Post-Removal Emails</span>
+      <span class="et-section-count" id="etRemovalCount"></span>
+    </div>
+    <div style="overflow-x:auto"><table class="et-table"><thead><tr>
+      <th>Job #</th><th>Name</th><th>Leader</th><th>Removal Date</th><th>Status</th><th>Actions</th>
+    </tr></thead><tbody id="etRemovalBody"></tbody></table></div>
+  </div>
+</div>
+
+</div><!-- /tabContent -->
 
 <footer>
   <div class="footer-text">Rasmus Auctions · Field Operations Dashboard · Railway</div>
@@ -1175,20 +1185,18 @@ async function sendConfirmation(id, btnOverride) {
 
 // ── Tab switching ─────────────────────────────────────────────
 function switchTab(tab) {
-  const ops     = document.getElementById('opsPane');
-  const leaders = document.getElementById('leaderPane');
-  const cal     = document.getElementById('calendarPane');
-  const email   = document.getElementById('emailTrackingPane');
-  const pending = document.getElementById('pendingPane');
+  const opsContent = document.getElementById('opsContent');
+  const leaders    = document.getElementById('leaderPane');
+  const cal        = document.getElementById('calendarPane');
+  const email      = document.getElementById('emailTrackingPane');
   document.getElementById('tabOps').classList.toggle('active',     tab === 'ops');
   document.getElementById('tabLeaders').classList.toggle('active', tab === 'leaders');
   document.getElementById('tabCal').classList.toggle('active',     tab === 'calendar');
   document.getElementById('tabEmail').classList.toggle('active',   tab === 'email');
-  ops.style.display     = tab === 'ops' ? '' : 'none';
-  pending.style.display = tab === 'ops' ? '' : 'none';
-  leaders.classList.toggle('visible', tab === 'leaders');
-  cal.classList.toggle('visible',     tab === 'calendar');
-  email.classList.toggle('visible',   tab === 'email');
+  opsContent.style.display = tab === 'ops'      ? 'flex' : 'none';
+  leaders.classList.toggle('visible',  tab === 'leaders');
+  cal.classList.toggle('visible',      tab === 'calendar');
+  email.classList.toggle('visible',    tab === 'email');
   if (tab === 'calendar') renderCalendar();
   if (tab === 'email')    renderEmailTracking();
 }
