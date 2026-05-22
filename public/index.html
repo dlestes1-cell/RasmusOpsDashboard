@@ -710,7 +710,10 @@ function renderProjects() {
           <div class="project-name">${esc(proj.name)}</div>
           <div class="project-loc">📍 ${esc(proj.location||'')} ${proj.date ? '&nbsp;·&nbsp; 🗓 '+proj.date : ''}</div>
         </div>
-        <span class="status-badge ${proj.status}">${statusLabel(proj.status)}</span>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
+          <span class="status-badge ${proj.status}">${statusLabel(proj.status)}</span>
+          ${proj.amount ? `<span style="font-family:var(--mono);font-size:12px;color:var(--gold);letter-spacing:0.04em">${fmtCurrency(proj.amount)}</span>` : ''}
+        </div>
       </div>
       ${proj.notes ? `<div class="project-notes">${esc(proj.notes)}</div>` : ''}
       ${contact ? `<div class="pc-contact">${contact}</div>` : ''}
@@ -1134,6 +1137,7 @@ function toggleForm(id) {
 function set(id, val) { document.getElementById(id).textContent = val; }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function statusLabel(s) { return {  'on-track':'On Track','at-risk':'At Risk','needs-attention':'Needs Attention','complete':'Complete'}[s]||s; }
+function fmtCurrency(v) { const n = parseFloat(v); if (!v || isNaN(n)) return ''; return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
 function fmtDate(ts) { return new Date(ts).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }
 function emptyState(icon, msg) { return `<div class="empty-state"><div class="icon">${icon}</div>${msg}<br><span style="opacity:.6">Use the button above to add one.</span></div>`; }
 function countdown(completedAt) {
@@ -1154,6 +1158,7 @@ function openJobDrawer(projectId) {
   document.getElementById('drawerJobTitle').textContent = p.jobNumber ? `${p.jobNumber} — ${p.name}` : p.name;
   document.getElementById('drawerJobSub').textContent   = [p.stage, p.date ? '📅 ' + p.date : ''].filter(Boolean).join('  ·  ');
   document.getElementById('drawerStatus').innerHTML     = `<span class="status-badge ${p.status}">${statusLabel(p.status)}</span>`;
+  document.getElementById('drawerValuation').textContent = fmtCurrency(p.amount) || '—';
   document.getElementById('drawerNotes').textContent    = p.notes || '—';
   document.getElementById('drawerAISummary').textContent = p.summaryText || '—';
 
@@ -1214,6 +1219,10 @@ async function submitDrawerLog() {
     <div class="drawer-section">
       <div class="drawer-section-label">Status</div>
       <div id="drawerStatus"></div>
+    </div>
+    <div class="drawer-section">
+      <div class="drawer-section-label">Valuation</div>
+      <div class="drawer-section-value" style="font-family:var(--mono);color:var(--gold);font-size:15px" id="drawerValuation"></div>
     </div>
     <div class="drawer-section">
       <div class="drawer-section-label">Contact</div>
