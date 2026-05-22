@@ -419,7 +419,7 @@ async function runDailyDigest() {
   const leaders   = getLeaderProjects();
   const confs     = getConfirmations();
 
-  const overdue   = confs.filter(c => !c.sent && (Date.now() - c.completedAt) >= WINDOW_MS);
+  const pendingId  = confs.filter(c => !c.sent && !c.idDateSet);
   const thisWeek  = projects.filter(p => p.date && p.date >= today && p.date <= new Date(Date.now() + 7*864e5).toISOString().slice(0,10));
 
   const sentTo = new Set();
@@ -440,9 +440,9 @@ async function runDailyDigest() {
       ? thisWeek.map(p => `<tr><td style="padding:4px 12px 4px 0;font-family:monospace;font-size:12px;color:#666">${p.jobNumber||''}</td><td style="padding:4px 12px 4px 0;font-size:12px">${p.name}</td><td style="padding:4px 0;font-family:monospace;font-size:11px;color:#e07020;font-weight:600">${p.date}</td></tr>`).join('')
       : '<tr><td colspan="3" style="padding:4px 0;color:#999;font-size:12px">No auctions this week</td></tr>';
 
-    const overdueSection = overdue.length
-      ? `<h3 style="font-family:monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#c84b4b;margin:24px 0 8px">WARNING: Overdue Confirmations (${overdue.length})</h3>
-         <ul style="margin:0;padding:0 0 0 18px">${overdue.map(c=>`<li style="font-size:12px;margin-bottom:4px">${c.site}${c.recipient?' &mdash; '+c.recipient:''}</li>`).join('')}</ul>` : '';
+    const pendingIdSection = pendingId.length
+      ? `<h3 style="font-family:monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#c84b4b;margin:24px 0 8px">New Auctions: Pending ID Date (${pendingId.length})</h3>
+         <ul style="margin:0;padding:0 0 0 18px">${pendingId.map(c=>`<li style="font-size:12px;margin-bottom:4px">${c.site}${c.recipient?' &mdash; '+c.recipient:''}</li>`).join('')}</ul>` : '';
 
     const html = `<!DOCTYPE html><html><body style="background:#f9f8f5;margin:0;padding:24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a">
 <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid #e5e3db;padding:28px">
@@ -456,7 +456,7 @@ async function runDailyDigest() {
   <h3 style="font-family:monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#888;margin:0 0 8px">Auctions This Week</h3>
   <table style="width:100%;border-collapse:collapse;margin-bottom:24px">${upcomingRows}</table>
 
-  ${overdueSection}
+  ${pendingIdSection}
 
   <p style="margin:24px 0 0;font-size:11px;color:#aaa;font-family:monospace">Rasmus Field Operations Dashboard · Auto-generated at 8:10 AM</p>
 </div></body></html>`;
