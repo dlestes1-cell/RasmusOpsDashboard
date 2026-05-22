@@ -285,8 +285,13 @@ async function runHubSpotSync() {
       if (closeDate && closeDate < today) return null;
       console.log(`[DEBUG] Deal ${deal.id} | dealstage ID: "${p.dealstage}" | resolved stage: "${stage}" | closedate: "${p.closedate}" | name: "${p.dealname}" | stage matches active list: ${stageMatches}`);
       if (!stageMatches) return null;
-      const jobMatch = (p.dealname || '').match(/^(R\d+)\s+(.*)/i);
-      const contact  = contactMap[deal.id] || {};
+      const jobMatch      = (p.dealname || '').match(/^(R\d+)\s+(.*)/i);
+      const contact       = contactMap[deal.id] || {};
+      const rawLeader     = p.project_leader || '';
+      const ownerFromPL   = ownerMap[rawLeader] || '';
+      const enumLabel     = leaderEnums[rawLeader] || '';
+      const ownerFromDeal = ownerMap[String(p.hubspot_owner_id || '')] || '';
+      const leader        = normalizeLeader(ownerFromPL) || normalizeLeader(enumLabel) || normalizeLeader(ownerFromDeal) || normalizeLeader(rawLeader);
       return {
         id:           String(deal.id),
         hubspotId:    String(deal.id),
@@ -296,6 +301,7 @@ async function runHubSpotSync() {
         date:         closeDate,
         status:       stageToStatus(stage),
         stage,
+        leader,
         notes:        p.description || '',
         summaryText:  '',
         amount:       p.marketing_projected_sales || p.amount || '',
@@ -562,6 +568,8 @@ function syncConfirmations(deals, contactMap) {
 }
 
 // ── Email Tracking ────────────────────────────────────────────
+const PAST_ID_STAGES = ['staffing', 'quality control', 'selling', 'reconciliation', 'selling online', 'live show', 'onboarding', 'id in-process'];
+
 function syncEmailTracking(projects) {
   const existing = getEmailTracking();
   const byKey    = {};
@@ -569,14 +577,21 @@ function syncEmailTracking(projects) {
 
   projects.forEach(p => {
     if (!p.hubspotId) return;
+    const stageLabel = (p.stage || '').toLowerCase();
+    const isNewAuction     = stageLabel.includes('new auction');
+    const isIdentification = stageLabel.includes('identification');
+    const isPastId         = PAST_ID_STAGES.some(s => stageLabel.includes(s)) || p.status === 'removal' || p.status === 'selling-online';
 
-    // Post-Identification: any project that has entered the Identification stage
-    if (p.idEnteredAt) {
+    // Post-Identification: any deal past "New Auction" has completed or is in identification
+    if (!isNewAuction && (isIdentification || isPastId || p.idEnteredAt)) {
       const key = `identification:${p.hubspotId}`;
+      const triggeredAt = p.idEnteredAt || (isIdentification ? Date.now() : null);
       if (!byKey[key]) {
-        addEmailTracking({ type:'identification', hubspotId:p.hubspotId, jobNumber:p.jobNumber, name:p.name, leader:p.leader||'', triggeredAt:p.idEnteredAt });
+        addEmailTracking({ type:'identification', hubspotId:p.hubspotId, jobNumber:p.jobNumber, name:p.name, leader:p.leader||'', triggeredAt });
       } else {
-        updateEmailTracking(byKey[key].id, { name:p.name, leader:p.leader||'' });
+        const updates = { name:p.name, leader:p.leader||'' };
+        if (p.idEnteredAt && !byKey[key].triggeredAt) updates.triggeredAt = p.idEnteredAt;
+        updateEmailTracking(byKey[key].id, updates);
       }
     }
 
@@ -584,7 +599,7 @@ function syncEmailTracking(projects) {
     if (p.status === 'removal') {
       const key = `removal:${p.hubspotId}`;
       if (!byKey[key]) {
-        addEmailTracking({ type:'removal', hubspotId:p.hubspotId, jobNumber:p.jobNumber, name:p.name, leader:p.leader||'', triggeredAt:p.removalEnteredAt || Date.now() });
+        addEmailTracking({ type:'removal', hubspotId:p.hubspotId, jobNumber:p.jobNumber, name:p.name, leader:p.leader||'', triggeredAt:p.removalEnteredAt || null });
       } else {
         updateEmailTracking(byKey[key].id, { name:p.name, leader:p.leader||'' });
       }
@@ -596,7 +611,7 @@ function runEmailTrackingCheck() {
   const WINDOW = 24 * 60 * 60 * 1000;
   const now    = Date.now();
   getEmailTracking().forEach(e => {
-    if (e.sent || e.flagged) return;
+    if (e.sent || e.flagged || !e.triggeredAt) return;
     if (now - e.triggeredAt > WINDOW) {
       updateEmailTracking(e.id, { flagged: true });
       addAlert({ type:'email-overdue', message:`OVERDUE: ${e.type === 'identification' ? 'Post-ID' : 'Post-Removal'} email not sent for ${e.name} — ${e.jobNumber || ''}`.trim() });
@@ -609,21 +624,21 @@ async function runEmailGmailScan() {
   const hasGmail = process.env.GMAIL_REFRESH_TOKEN && process.env.GMAIL_CLIENT_ID;
   if (!hasGmail) return;
 
-  const unsent = getEmailTracking().filter(e => !e.sent);
+  const tracking = getEmailTracking();
+  const unsent   = tracking.filter(e => !e.sent);
   if (!unsent.length) { console.log('[EMAIL-SCAN] No unsent entries — skipping'); return; }
 
   const leaderEntries = Object.entries(LEADER_EMAILS);
   if (!leaderEntries.length) { console.log('[EMAIL-SCAN] No leader emails loaded — skipping'); return; }
 
-  // Search from earliest trigger date so we don't miss anything
-  const earliest  = Math.min(...unsent.map(e => e.triggeredAt));
-  const afterDate = (() => {
-    const d = new Date(earliest);
+  // Search 90 days back to catch all historical identification emails
+  const ninetyAgo = (() => {
+    const d = new Date(Date.now() - 90 * 864e5);
     return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
   })();
 
   const fromQuery = leaderEntries.map(([, email]) => `from:${email}`).join(' OR ');
-  const query     = `(${fromQuery}) after:${afterDate}`;
+  const query     = `(${fromQuery}) (subject:"identification complete" OR subject:"removal complete") after:${ninetyAgo}`;
   console.log(`[EMAIL-SCAN] Searching Gmail: ${query}`);
 
   const messages = await gmail.searchMessages(query, 100);
@@ -635,11 +650,6 @@ async function runEmailGmailScan() {
     const meta = await gmail.getMessageMetadata(msg.id);
     if (!meta) continue;
 
-    // Identify which leader sent this
-    const leaderMatch = leaderEntries.find(([, email]) => meta.from.toLowerCase().includes(email.toLowerCase()));
-    if (!leaderMatch) continue;
-    const leaderName = leaderMatch[0];
-
     // Determine type from subject phrase
     const subjectLower = meta.subject.toLowerCase();
     let type = null;
@@ -647,21 +657,35 @@ async function runEmailGmailScan() {
     else if (subjectLower.includes('removal complete'))   type = 'removal';
     if (!type) continue;
 
-    // Match to the leader's open entry of this type closest to (but before) the email date
-    const candidates = unsent.filter(e =>
-      !e.sent &&
-      e.type === type &&
-      e.leader === leaderName &&
-      meta.internalDate >= e.triggeredAt
-    ).sort((a, b) => b.triggeredAt - a.triggeredAt); // most recent first
+    // Identify which leader sent this
+    const leaderMatch = leaderEntries.find(([, email]) => meta.from.toLowerCase().includes(email.toLowerCase()));
+    const leaderName  = leaderMatch ? leaderMatch[0] : null;
 
-    const entry = candidates[0] || null;
+    // Extract job number from subject (e.g. R260384)
+    const jnMatch = meta.subject.match(/R(\d+)/i);
+    const subjectJobNum = jnMatch ? `R${jnMatch[1]}` : null;
+
+    // Match by job number first (most reliable), then fall back to leader+time match
+    let entry = null;
+    if (subjectJobNum) {
+      entry = unsent.find(e => !e.sent && e.type === type && e.jobNumber && e.jobNumber.toUpperCase() === subjectJobNum.toUpperCase());
+    }
+    if (!entry && leaderName) {
+      const candidates = unsent.filter(e =>
+        !e.sent && e.type === type && e.leader === leaderName &&
+        (!e.triggeredAt || meta.internalDate >= e.triggeredAt)
+      ).sort((a, b) => (b.triggeredAt || 0) - (a.triggeredAt || 0));
+      entry = candidates[0] || null;
+    }
 
     if (entry) {
       updateEmailTracking(entry.id, { sent: true, sentAt: meta.internalDate, flagged: false, autoDetected: true });
-      console.log(`[EMAIL-SCAN] Auto-marked sent: ${leaderName} → ${jobNumber} (${entry.type}) at ${new Date(meta.internalDate).toLocaleString()}`);
+      console.log(`[EMAIL-SCAN] Auto-marked sent: ${leaderName || 'unknown'} → ${entry.jobNumber} (${entry.type}) at ${new Date(meta.internalDate).toLocaleString()}`);
       matched++;
+    } else {
+      console.log(`[EMAIL-SCAN] No match for: "${meta.subject}" from ${meta.from}`);
     }
+    await new Promise(r => setTimeout(r, 200));
   }
   console.log(`[EMAIL-SCAN] Matched ${matched} of ${messages.length} messages`);
   if (matched && broadcast) broadcast();

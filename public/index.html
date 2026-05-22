@@ -1252,6 +1252,7 @@ function renderEmailTracking() {
 
   function windowLabel(e) {
     if (e.sent) return { cls:'sent', text:`${e.autoDetected ? '⟳ ' : '✓ '}Sent ${new Date(e.sentAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}` };
+    if (!e.triggeredAt) return { cls:'warning', text:'Date Unknown' };
     const elapsed = now - e.triggeredAt;
     if (elapsed > WINDOW) {
       const h = Math.floor((elapsed - WINDOW) / 3600000);
@@ -1280,15 +1281,16 @@ function renderEmailTracking() {
     </tr>`;
   }
 
-  const idEntries      = entries.filter(e => e.type === 'identification').sort((a,b) => (a.sent - b.sent) || a.triggeredAt - b.triggeredAt);
-  const removalEntries = entries.filter(e => e.type === 'removal').sort((a,b) => (a.sent - b.sent) || a.triggeredAt - b.triggeredAt);
+  const sortEntries = (a, b) => (a.sent - b.sent) || ((a.triggeredAt || 0) - (b.triggeredAt || 0));
+  const idEntries      = entries.filter(e => e.type === 'identification').sort(sortEntries);
+  const removalEntries = entries.filter(e => e.type === 'removal').sort(sortEntries);
 
-  const idOverdue = idEntries.filter(e => !e.sent && now - e.triggeredAt > WINDOW).length;
+  const idOverdue = idEntries.filter(e => !e.sent && e.triggeredAt && now - e.triggeredAt > WINDOW).length;
   document.getElementById('etIdCount').textContent = `${idEntries.length} total${idOverdue ? ` · ${idOverdue} overdue` : ''}`;
   document.getElementById('etIdCount').className   = `et-section-count ${idOverdue ? 'et-count-warn' : 'et-count-ok'}`;
   document.getElementById('etIdBody').innerHTML    = idEntries.length ? idEntries.map(buildRow).join('') : `<tr><td colspan="6" class="et-empty">No identification emails tracked yet.</td></tr>`;
 
-  const remOverdue = removalEntries.filter(e => !e.sent && now - e.triggeredAt > WINDOW).length;
+  const remOverdue = removalEntries.filter(e => !e.sent && e.triggeredAt && now - e.triggeredAt > WINDOW).length;
   document.getElementById('etRemovalCount').textContent = `${removalEntries.length} total${remOverdue ? ` · ${remOverdue} overdue` : ''}`;
   document.getElementById('etRemovalCount').className   = `et-section-count ${remOverdue ? 'et-count-warn' : 'et-count-ok'}`;
   document.getElementById('etRemovalBody').innerHTML    = removalEntries.length ? removalEntries.map(buildRow).join('') : `<tr><td colspan="6" class="et-empty">No removal emails tracked yet.</td></tr>`;
