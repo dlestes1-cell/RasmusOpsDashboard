@@ -197,6 +197,7 @@ The email should confirm project/auction completion, thank them, note next steps
     })
   });
   const data = await r.json();
+  if (data.error) throw new Error(`Anthropic API error: ${data.error.type} — ${data.error.message}`);
   return data.content?.[0]?.text || '';
 }
 
