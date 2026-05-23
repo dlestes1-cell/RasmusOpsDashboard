@@ -582,10 +582,11 @@ function syncEmailTracking(projects) {
     const isIdentification = stageLabel.includes('identification');
     const isPastId         = PAST_ID_STAGES.some(s => stageLabel.includes(s)) || p.status === 'removal' || p.status === 'selling-online';
 
-    // Post-Identification: any deal past "New Auction" has completed or is in identification
-    if (!isNewAuction && (isIdentification || isPastId || p.idEnteredAt)) {
+    // Post-Identification: only deals that have COMPLETED identification (moved past the stage)
+    // Deals still in Identification/ID In-process are not done yet — don't track them
+    if (isPastId || p.idEnteredAt) {
       const key = `identification:${p.hubspotId}`;
-      const triggeredAt = p.idEnteredAt || (isIdentification ? Date.now() : null);
+      const triggeredAt = p.idEnteredAt || null;
       if (!byKey[key]) {
         addEmailTracking({ type:'identification', hubspotId:p.hubspotId, jobNumber:p.jobNumber, name:p.name, leader:p.leader||'', triggeredAt });
       } else {
