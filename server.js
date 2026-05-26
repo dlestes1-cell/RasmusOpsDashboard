@@ -418,6 +418,144 @@ app.get('/api/sync/debug', async (req, res) => {
   }
 });
 
+// ── HubSpot Active Projects ───────────────────────────────────
+app.get('/api/hubspot-active-projects', async (req, res) => {
+  const hsKey = process.env.HUBSPOT_API_KEY;
+  if (!hsKey) return res.status(503).json({ error: 'No HUBSPOT_API_KEY' });
+
+  const PIPELINE = '147097136';
+  const ACTIVE_STAGES = {
+    '249570210':  'Identification',
+    '978470732':  'Auction Posting',
+    '249570211':  'Quality Control',
+    '1026748166': 'Staffing',
+    '249570214':  'Selling & Closing'
+  };
+
+  const OWNERS = {
+    '84584819':   'Karen Kester',
+    '89024581':   'Blake Johnson',
+    '1613587974': 'Kenneth Weaver',
+    '76302559':   'Darren Estes',
+    '84107196':   'Luciana Castillo',
+    '84584840':   'Werner Manrique-Martinez',
+    '76302361':   'Madi Felix',
+    '76267712':   'Lauren Balderson',
+    '78392611':   'Clarke Gray',
+    '89024559':   'Kelly Jackson',
+    '89745865':   'Rachel Wulfekuhle',
+    '90980995':   'Mashao Seabela',
+    '321507837':  'Cecelia Bussey',
+    '638585431':  'Crystal Felix',
+    '650958939':  'Michelle Jarvis',
+    '662451144':  'Scott Wright',
+    '1275610303': 'Abby Fitzgerald',
+    '1338132313': 'Kathleen Rodimak',
+    '1355258725': 'Chris Kubica',
+    '1391725369': 'Chris Rasmus',
+    '1886951536': 'Patrick Rasmus',
+    '2006075167': 'Theo Babacar',
+    '2061785375': 'Candy Sicilia',
+    '24375587':   'Erik Rasmus',
+    '72301438':   'Adam Roberts',
+    '77636448':   'Susan Rasmus',
+    '77935192':   'Demomé Hydol'
+  };
+
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let allDeals = [];
+    let after = undefined;
+
+    do {
+      const body = {
+        filterGroups: [{
+          filters: [
+            { propertyName: 'pipeline',       operator: 'EQ',           value: PIPELINE },
+            { propertyName: 'dealstage',      operator: 'IN',           values: Object.keys(ACTIVE_STAGES) },
+            { propertyName: 'project_leader', operator: 'HAS_PROPERTY' }
+          ]
+        }],
+        properties: ['dealname', 'dealstage', 'project_leader', 'triage_poc', 'closedate'],
+        limit: 100,
+        sorts: [{ propertyName: 'closedate', direction: 'ASCENDING' }]
+      };
+      if (after) body.after = after;
+
+      const r = await fetch('https://api.hubapi.com/crm/v3/objects/deals/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hsKey}` },
+        body: JSON.stringify(body)
+      });
+      const data = await r.json();
+      allDeals = allDeals.concat(data.results || []);
+      after = data.paging?.next?.after;
+    } while (after);
+
+    const filtered = allDeals.filter(deal => {
+      const cd = deal.properties.closedate;
+      if (!cd) return true;
+      return new Date(cd) >= today;
+    });
+
+    const deals = filtered.map(deal => {
+      const p         = deal.properties;
+      const leaderId  = p.project_leader;
+      const triageId  = p.triage_poc;
+      const closedate = p.closedate ? new Date(p.closedate) : null;
+      return {
+        id:           deal.id,
+        name:         p.dealname || 'Untitled',
+        stage:        ACTIVE_STAGES[p.dealstage] || p.dealstage,
+        closedate:    closedate
+                        ? closedate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                        : null,
+        closedateRaw: p.closedate || null,
+        leaderId,
+        leaderName:   OWNERS[leaderId] || `Owner ${leaderId}`,
+        triagePoc:    triageId ? (OWNERS[triageId] || `Owner ${triageId}`) : null,
+        hubspotUrl:   `https://app.hubspot.com/contacts/46444696/record/0-3/${deal.id}`
+      };
+    });
+
+    const groups = {};
+    deals.forEach(deal => {
+      if (!groups[deal.leaderName]) groups[deal.leaderName] = [];
+      groups[deal.leaderName].push(deal);
+    });
+
+    Object.values(groups).forEach(arr => {
+      arr.sort((a, b) => {
+        if (!a.closedateRaw && !b.closedateRaw) return 0;
+        if (!a.closedateRaw) return 1;
+        if (!b.closedateRaw) return -1;
+        return new Date(a.closedateRaw) - new Date(b.closedateRaw);
+      });
+    });
+
+    const sortedGroups = Object.entries(groups).sort(([, a], [, b]) => {
+      const aDate = a.find(d => d.closedateRaw)?.closedateRaw;
+      const bDate = b.find(d => d.closedateRaw)?.closedateRaw;
+      if (!aDate && !bDate) return 0;
+      if (!aDate) return 1;
+      if (!bDate) return -1;
+      return new Date(aDate) - new Date(bDate);
+    });
+
+    res.json({
+      asOf:   new Date().toISOString(),
+      total:  deals.length,
+      groups: sortedGroups.map(([leader, jobs]) => ({ leader, jobs }))
+    });
+
+  } catch (e) {
+    console.error('[HUBSPOT-ACTIVE] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Start ─────────────────────────────────────────────────────
 scheduler.init(broadcast);
 
