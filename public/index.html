@@ -1099,13 +1099,8 @@ function renderPending() {
     }
     const allJobs = (hubspotProjects.groups || []).flatMap(g => g.jobs);
     const matched = jobNum ? allJobs.find(j => j.name && j.name.toUpperCase().startsWith(jobNum.toUpperCase())) : null;
-    const hsUrl   = matched
-      ? matched.hubspotUrl
-      : jobNum
-        ? `https://app.hubspot.com/contacts/46444696/objects/0-3/views/all/list?query=${encodeURIComponent(jobNum)}`
-        : null;
     const jobCell = jobNum
-      ? `${esc(jobNum)}${hsUrl ? ` <a href="${hsUrl}" target="_blank" class="hs-link" title="Open in HubSpot">↗</a>` : ''}`
+      ? `${esc(jobNum)}${matched ? ` <a href="${matched.hubspotUrl}" target="_blank" class="hs-link" title="Open in HubSpot">↗</a>` : ''}`
       : '—';
     return `<tr id="ec-${e.id}">
       <td class="pj-job">${jobCell}</td>
