@@ -1067,50 +1067,6 @@ function renderProjects() {
       <button class="ai-btn" style="padding:3px 8px;font-size:9px" onclick="event.stopPropagation();aiSummary('${proj.id}')" title="${proj.summaryText ? 'Refresh summary' : 'Generate summary'}">✦</button>
     </div>
   </div>`; }).join('');
-  return;
-
-  el.innerHTML = p.map(proj => {
-    const contact = [
-      proj.contactName  ? `<span class="pc-contact-item"><span class="pc-contact-lbl">Contact</span> ${esc(proj.contactName)}</span>` : '',
-      proj.contactPhone ? `<span class="pc-contact-item"><span class="pc-contact-lbl">Ph</span> <a href="tel:${esc(proj.contactPhone)}">${esc(proj.contactPhone)}</a></span>` : '',
-      proj.contactEmail ? `<span class="pc-contact-item"><span class="pc-contact-lbl">Email</span> <a href="mailto:${esc(proj.contactEmail)}">${esc(proj.contactEmail)}</a></span>` : '',
-    ].filter(Boolean).join('');
-    const log = (proj.activityLog || []).slice(0, 5).map(e =>
-      `<div class="pc-log-entry"><span class="pc-log-ts">${new Date(e.ts).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span><span class="pc-log-text">${esc(e.text)}</span></div>`
-    ).join('');
-    return `
-    <div class="project-card" id="pc-${proj.id}" onclick="if(!event.target.closest('button,select,input,a'))openJobDrawer('${proj.id}')"
-      <div class="pc-top">
-        <div>
-          <div class="project-name">${esc(proj.name)}</div>
-          <div class="project-loc">📍 ${esc(proj.location||'')} ${proj.date ? '&nbsp;·&nbsp; 🗓 '+proj.date : ''}</div>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
-          <span class="status-badge ${proj.status}">${statusLabel(proj.status)}</span>
-          ${proj.amount ? `<span style="font-family:var(--mono);font-size:12px;color:var(--gold);letter-spacing:0.04em">${fmtCurrency(proj.amount)}</span>` : ''}
-        </div>
-      </div>
-      ${proj.notes ? `<div class="project-notes">${esc(proj.notes)}</div>` : ''}
-      ${contact ? `<div class="pc-contact">${contact}</div>` : ''}
-      <div class="pc-actions">
-        <select class="status-select" onchange="patchProject('${proj.id}', {status:this.value})">
-          <option value="identification"  ${proj.status==='identification'?'selected':''}>Identification</option>
-          <option value="selling-online"  ${proj.status==='selling-online'?'selected':''}>Selling Online</option>
-          <option value="removal"         ${proj.status==='removal'?'selected':''}>Removal</option>
-          <option value="complete"        ${proj.status==='complete'?'selected':''}>Complete</option>
-        </select>
-        <button class="ai-btn" onclick="aiSummary('${proj.id}')">✦ Summary</button>
-      </div>
-      ${proj.summaryText ? `<div class="ai-summary visible">${esc(proj.summaryText)}</div>` : ''}
-      <div class="pc-log">
-        ${log ? `<div class="pc-log-entries">${log}</div>` : ''}
-        <div class="pc-log-add">
-          <input class="pc-log-input" id="log-${proj.id}" placeholder="Add update…" onkeydown="if(event.key==='Enter')submitLog('${proj.id}')" />
-          <button class="pc-log-btn" onclick="submitLog('${proj.id}')">Log</button>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
 }
 
 function renderPending() {
@@ -1520,6 +1476,12 @@ function fmtDateShort(iso) {
   return `${months[+m-1]} ${+d}${year}`;
 }
 
+function localDateKey(date = new Date()) {
+  const d = new Date(date);
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
+
 const LP_LEADERS = [
   'Karen Kester','Kenneth Weaver','Luciana Castillo',
   'Darren Estes','Blake Johnson','Werner Manrique-Martinez'
@@ -1528,7 +1490,7 @@ const LP_LEADERS = [
 function renderLeaderProjects() {
   const el    = document.getElementById('leaderProjectList');
   if (!el) return;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey();
 
   const active = (state.leaderProjects || []).filter(p => {
     if (p.startDate && p.startDate < '2026-04-01') return false;
@@ -1633,7 +1595,14 @@ function toggleForm(id) {
   }
 }
 function set(id, val) { document.getElementById(id).textContent = val; }
-function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function esc(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 function statusLabel(s) { return {'identification':'Identification','selling-online':'Selling Online','removal':'Removal','complete':'Complete'}[s]||s; }
 function fmtCurrency(v) { const n = parseFloat(v); if (!v || isNaN(n)) return ''; return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
 function fmtDate(ts) { return new Date(ts).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }

@@ -15,6 +15,18 @@ const wss    = new WebSocketServer({ server });
 
 const PORT = process.env.PORT || 3000;
 
+function localDateKey(date = new Date()) {
+  const d = new Date(date);
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
+
+function formatDateKey(dateKey) {
+  if (!dateKey) return null;
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 // ── Middleware ────────────────────────────────────────────────
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -48,7 +60,7 @@ app.get('/api/projects', (req, res) => {
 app.post('/api/projects', (req, res) => {
   const { name, location, date, status, notes, contactName, contactPhone, contactEmail } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
-  state.addProject({ name, location, date, status: status || 'on-track', notes: notes || '', contactName: contactName || '', contactPhone: contactPhone || '', contactEmail: contactEmail || '' });
+  state.addProject({ name, location, date, status: status || 'identification', notes: notes || '', contactName: contactName || '', contactPhone: contactPhone || '', contactEmail: contactEmail || '' });
   broadcast();
   res.json({ ok: true });
 });
@@ -351,18 +363,35 @@ app.get('/api/sync/test-contact', async (req, res) => {
   }
 });
 
-// ── HubSpot pipelines list ────────────────────────────────────
+// ── Sync: List All Pipelines ──────────────────────────────────
 app.get('/api/sync/pipelines', async (req, res) => {
   const hsKey = process.env.HUBSPOT_API_KEY;
   if (!hsKey) return res.status(503).json({ error: 'No HUBSPOT_API_KEY' });
+
   try {
-    const r = await fetch('https://api.hubapi.com/crm/v3/pipelines/deals', {
-      headers: { Authorization: `Bearer ${hsKey}` }
+    const response = await fetch('https://api.hubapi.com/crm/v3/pipelines/deals', {
+      headers: {
+        'Authorization': `Bearer ${hsKey}`,
+        'Content-Type': 'application/json'
+      }
     });
-    const data = await r.json();
-    res.json((data.results || []).map(p => ({ id: p.id, label: p.label })));
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+
+    if (!response.ok) {
+      const err = await response.text();
+      return res.status(response.status).json({ error: err });
+    }
+
+    const data = await response.json();
+
+    const pipelines = data.results.map(p => ({
+      id: p.id,
+      label: p.label,
+      stages: p.stages.map(s => ({ id: s.id, label: s.label }))
+    }));
+
+    res.json({ count: pipelines.length, pipelines });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -463,8 +492,7 @@ app.get('/api/hubspot-active-projects', async (req, res) => {
   };
 
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = localDateKey();
 
     let allDeals = [];
     let after = undefined;
@@ -497,22 +525,20 @@ app.get('/api/hubspot-active-projects', async (req, res) => {
     const filtered = allDeals.filter(deal => {
       const cd = deal.properties.closedate;
       if (!cd) return true;
-      return new Date(cd) >= today;
+      return cd.split('T')[0] >= today;
     });
 
     const deals = filtered.map(deal => {
       const p         = deal.properties;
       const leaderId  = p.project_leader;
       const triageId  = p.triage_poc;
-      const closedate = p.closedate ? new Date(p.closedate) : null;
+      const closeDate = p.closedate ? p.closedate.split('T')[0] : null;
       return {
         id:           deal.id,
         name:         p.dealname || 'Untitled',
         stage:        ACTIVE_STAGES[p.dealstage] || p.dealstage,
-        closedate:    closedate
-                        ? closedate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                        : null,
-        closedateRaw: p.closedate || null,
+        closedate:    formatDateKey(closeDate),
+        closedateRaw: closeDate,
         leaderId,
         leaderName:   OWNERS[leaderId] || `Owner ${leaderId}`,
         triagePoc:    triageId ? (OWNERS[triageId] || `Owner ${triageId}`) : null,
@@ -531,7 +557,7 @@ app.get('/api/hubspot-active-projects', async (req, res) => {
         if (!a.closedateRaw && !b.closedateRaw) return 0;
         if (!a.closedateRaw) return 1;
         if (!b.closedateRaw) return -1;
-        return new Date(a.closedateRaw) - new Date(b.closedateRaw);
+        return a.closedateRaw.localeCompare(b.closedateRaw);
       });
     });
 
@@ -541,7 +567,7 @@ app.get('/api/hubspot-active-projects', async (req, res) => {
       if (!aDate && !bDate) return 0;
       if (!aDate) return 1;
       if (!bDate) return -1;
-      return new Date(aDate) - new Date(bDate);
+      return aDate.localeCompare(bDate);
     });
 
     res.json({
