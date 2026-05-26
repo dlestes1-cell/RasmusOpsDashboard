@@ -181,6 +181,23 @@ app.delete('/api/email-tracking/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+app.post('/api/email-tracking/:id/send', async (req, res) => {
+  const { recipient, text } = req.body;
+  if (!recipient) return res.status(400).json({ error: 'recipient required' });
+  if (!text)      return res.status(400).json({ error: 'text required' });
+  const entry = getEmailTrackingEntry(req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Entry not found' });
+
+  const subject = `Identification Complete — ${entry.jobNumber ? entry.jobNumber + ' | ' : ''}${entry.name}`;
+  const html    = `<!DOCTYPE html><html><body style="font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;padding:24px;max-width:600px">${text.replace(/\n/g, '<br>')}</body></html>`;
+  const result  = await gmail.sendEmail(recipient, subject, html);
+  if (!result.ok) return res.status(502).json({ error: 'Gmail send failed', gmailError: result.gmailError });
+
+  updateEmailTracking(req.params.id, { sent: true, sentAt: Date.now() });
+  broadcast();
+  res.json({ ok: true });
+});
+
 // ── AI proxy — keeps API key server-side, never in browser ────
 app.post('/api/ai/summary', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -264,6 +281,34 @@ app.post('/api/ai/draft-email', async (req, res) => {
     state.updateConfirmation(confirmationId, { draftText: text });
     broadcast();
     res.json({ text });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/ai/et-draft', async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured' });
+  const entry = getEmailTrackingEntry(req.body.entryId);
+  if (!entry) return res.status(404).json({ error: 'Entry not found' });
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 400,
+        messages: [{ role: 'user', content: `You are writing on behalf of Rasmus Auctions Field Operations. Write a professional post-identification email to the seller/client.
+
+Job: ${entry.jobNumber ? entry.jobNumber + ' — ' : ''}${entry.name}
+Project Leader: ${entry.leader || 'Field Operations'}
+
+This email informs the seller that the identification (cataloging/inventory) of their items is complete and outlines what comes next: preparation for sale, auction timeline, and removal coordination after the auction. Keep the tone professional and reassuring. Sign from "${entry.leader ? entry.leader + ', ' : ''}Field Operations, Rasmus Auctions". Write ONLY the email body, under 200 words.` }]
+      })
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(`Anthropic error: ${data.error.message}`);
+    res.json({ text: data.content?.[0]?.text || '' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

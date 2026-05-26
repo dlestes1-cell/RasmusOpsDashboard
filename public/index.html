@@ -611,8 +611,12 @@
 <!-- Draft Modal -->
 <div class="modal-overlay" id="draftModal">
   <div class="modal-inner">
-    <h2>AI-Generated Confirmation Email</h2>
+    <h2 id="draftModalTitle">AI-Generated Email</h2>
     <p id="draftMeta"></p>
+    <div id="draftRecipientRow" style="display:none;margin-bottom:10px">
+      <label style="font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-dim);display:block;margin-bottom:4px">Recipient Email</label>
+      <input id="draftRecipientInput" type="email" placeholder="seller@example.com" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;font-size:12px;font-family:var(--sans)" />
+    </div>
     <div id="draftContent" class="draft-body"></div>
     <div class="modal-btns">
       <button class="btn-secondary" onclick="closeDraft()">Close</button>
@@ -870,6 +874,7 @@ let state = { projects: [], confirmations: [], alerts: [], leaderProjects: [] };
 let drawerProjectId = null;
 let currentDraftText = '';
 let currentDraftConfirmationId = null;
+let currentDraftEntryId = null;
 
 function connect() {
   ws = new WebSocket(`${proto}://${location.host}`);
@@ -1191,6 +1196,9 @@ async function aiSummary(projectId) {
 async function aiDraft(confirmationId) {
   const e = (state.confirmations||[]).find(x => x.id === confirmationId);
   currentDraftConfirmationId = confirmationId;
+  currentDraftEntryId = null;
+  document.getElementById('draftModalTitle').textContent = 'AI-Generated Confirmation Email';
+  document.getElementById('draftRecipientRow').style.display = 'none';
   document.getElementById('draftMeta').textContent = `For: ${e?.site || ''} → ${e?.recipient || 'recipient'}`;
   document.getElementById('draftContent').innerHTML = '<div class="draft-loading">Generating via Claude…</div>';
   document.getElementById('sendDraftBtn').disabled = true;
@@ -1207,6 +1215,28 @@ async function aiDraft(confirmationId) {
 function closeDraft() {
   document.getElementById('draftModal').classList.remove('open');
   currentDraftConfirmationId = null;
+  currentDraftEntryId = null;
+  document.getElementById('draftRecipientRow').style.display = 'none';
+}
+
+async function etDraftEmail(id) {
+  const entry = (state.emailTracking || []).find(x => x.id === id);
+  currentDraftEntryId = id;
+  currentDraftConfirmationId = null;
+  currentDraftText = '';
+  document.getElementById('draftModalTitle').textContent = 'Post-ID Email — ' + (entry?.name || '');
+  document.getElementById('draftMeta').textContent = `Job: ${entry?.jobNumber || '—'} · Leader: ${entry?.leader || '—'}`;
+  document.getElementById('draftRecipientRow').style.display = 'block';
+  document.getElementById('draftRecipientInput').value = '';
+  document.getElementById('draftContent').innerHTML = '<div class="draft-loading">Generating via Claude…</div>';
+  document.getElementById('sendDraftBtn').disabled = true;
+  document.getElementById('draftModal').classList.add('open');
+
+  const res  = await fetch('/api/ai/et-draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entryId: id }) });
+  const data = await res.json();
+  currentDraftText = data.text || data.error || 'Error generating draft.';
+  document.getElementById('draftContent').textContent = currentDraftText;
+  document.getElementById('sendDraftBtn').disabled = false;
 }
 
 function copyDraft() {
@@ -1217,6 +1247,25 @@ function copyDraft() {
 }
 
 async function sendFromModal() {
+  if (currentDraftEntryId) {
+    const recipient = document.getElementById('draftRecipientInput').value.trim();
+    if (!recipient) { alert('Please enter a recipient email address.'); return; }
+    const btn = document.getElementById('sendDraftBtn');
+    btn.disabled = true; btn.textContent = 'Sending…';
+    try {
+      const res = await fetch(`/api/email-tracking/${currentDraftEntryId}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipient, text: currentDraftText })
+      });
+      const data = await res.json();
+      if (data.ok) { closeDraft(); }
+      else { alert('Send failed: ' + (data.error || 'Unknown error')); btn.disabled = false; btn.textContent = 'Send via Gmail'; }
+    } catch (e) {
+      alert('Send error: ' + e.message); btn.disabled = false; btn.textContent = 'Send via Gmail';
+    }
+    return;
+  }
   if (!currentDraftConfirmationId) return;
   const ok = await sendConfirmation(currentDraftConfirmationId, document.getElementById('sendDraftBtn'));
   if (ok) closeDraft();
@@ -1341,6 +1390,7 @@ function renderEmailTracking() {
       <td class="et-job">${e.triggeredAt ? new Date(e.triggeredAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '—'}</td>
       <td class="et-window ${w.cls}">${w.text}</td>
       <td class="et-actions">
+        ${!e.sent ? `<button class="draft-btn" onclick="etDraftEmail('${e.id}')">✦ Draft</button>` : ''}
         ${!e.sent ? `<button class="et-sent-btn" onclick="markEmailSent('${e.id}')">✓ Mark Sent</button>` : ''}
         <button class="et-dismiss-btn" onclick="dismissEmailEntry('${e.id}')">✕</button>
       </td>
