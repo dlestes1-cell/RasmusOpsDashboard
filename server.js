@@ -8,6 +8,7 @@ const state     = require('./state');
 const { getEmailTracking, getEmailTrackingEntry, updateEmailTracking, deleteEmailTracking } = require('./state');
 const scheduler = require('./tasks/scheduler');
 const gmail     = require('./tasks/gmail');
+const { sanitizeSubject } = gmail;
 
 const app    = express();
 const server = http.createServer(app);
@@ -188,7 +189,7 @@ app.post('/api/email-tracking/:id/send', async (req, res) => {
   const entry = getEmailTrackingEntry(req.params.id);
   if (!entry) return res.status(404).json({ error: 'Entry not found' });
 
-  const subject = `Identification Complete — ${entry.jobNumber ? entry.jobNumber + ' | ' : ''}${entry.name}`;
+  const subject = `Identification Complete - ${entry.jobNumber ? entry.jobNumber + ' | ' : ''}${sanitizeSubject(entry.name)}`;
   const html    = `<!DOCTYPE html><html><body style="font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;padding:24px;max-width:600px">${text.replace(/\n/g, '<br>')}</body></html>`;
   const result  = await gmail.sendEmail(recipient, subject, html);
   if (!result.ok) return res.status(502).json({ error: 'Gmail send failed', gmailError: result.gmailError });
@@ -327,7 +328,7 @@ app.post('/api/confirmations/:id/send', async (req, res) => {
     }
     if (!draftText) return res.status(500).json({ error: 'Could not generate email draft' });
 
-    const subject = `Site Confirmation — ${c.site}`;
+    const subject = `Site Confirmation - ${sanitizeSubject(c.site)}`;
     const html = `<!DOCTYPE html><html><body style="font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;padding:24px;max-width:600px">${draftText.replace(/\n/g, '<br>')}</body></html>`;
 
     const result = await gmail.sendEmail(c.recipient, subject, html);

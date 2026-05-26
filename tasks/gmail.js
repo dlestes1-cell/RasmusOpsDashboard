@@ -97,4 +97,4 @@ async function createDraft(to, subject, htmlBody) {
   return false;
 }
 
-module.exports = { getAccessToken, searchMessages, getMessageMetadata, sendEmail, createDraft };
+module.exports = { getAccessToken, searchMessages, getMessageMetadata, sendEmail, createDraft, sanitizeSubject };
