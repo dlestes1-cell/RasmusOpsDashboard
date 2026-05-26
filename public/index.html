@@ -19,8 +19,8 @@
   body { background:var(--bg); color:var(--text); font-family:var(--sans); height:100vh; overflow:hidden; display:flex; flex-direction:column; }
   #tabContent { flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:column; }
   #opsContent { flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:column; }
-  main#opsPane { flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:column; }
-  main#opsPane > .panel { flex:1; min-height:0; }
+  main#opsPane { flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:row; }
+  main#opsPane > .panel { flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:column; }
 
   /* Header */
   header { border-bottom:1px solid #0a0908; padding:14px 28px; display:flex; align-items:center; justify-content:space-between; background:#141210; box-shadow:0 1px 4px rgba(0,0,0,0.5); }
@@ -71,7 +71,8 @@
   .panel-body::-webkit-scrollbar-thumb { background:var(--border); }
 
   /* Pending Jobs Panel */
-  #pendingPane { background:var(--surface); border-top:1px solid var(--border); }
+  #pendingPane { background:var(--surface); border-left:1px solid var(--border); flex:0 0 420px; display:flex; flex-direction:column; overflow:hidden; }
+  #pendingPane .pending-scroll { flex:1; overflow-y:auto; overflow-x:auto; }
   .pending-header { padding:18px 24px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; background:var(--surface); }
   .pending-table { width:100%; border-collapse:collapse; }
   .pending-table th { padding:8px 12px; font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-dim); text-align:left; border-bottom:1px solid var(--border); background:var(--surface2); }
@@ -251,6 +252,8 @@
 
   /* ── Mobile ──────────────────────────────────────────────── */
   @media (max-width: 768px) {
+    main#opsPane { flex-direction: column; }
+    #pendingPane { flex: 0 0 auto; border-left: none; border-top: 1px solid var(--border); }
     /* Header */
     header { padding:10px 14px; gap:8px; }
     .logo-name { font-size:16px; }
@@ -722,31 +725,30 @@
     </div>
   </div>
 
+  <!-- Pending Jobs Panel -->
+  <div id="pendingPane">
+    <div class="pending-header">
+      <div class="panel-title"><span class="dot amber"></span> Pending Confirmations</div>
+      <span id="pendingCount" style="font-family:var(--mono);font-size:10px;color:var(--text-dim)"></span>
+    </div>
+    <div class="pending-scroll">
+      <table class="pending-table">
+        <thead>
+          <tr>
+            <th>Job #</th>
+            <th>Site / Name</th>
+            <th>Recipient</th>
+            <th>Entered</th>
+            <th>Auction Date</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="pendingList"></tbody>
+      </table>
+    </div>
+  </div>
 </main>
-
-<!-- Pending Jobs Panel -->
-<div id="pendingPane">
-  <div class="pending-header">
-    <div class="panel-title"><span class="dot amber"></span> Pending Site Confirmations</div>
-    <span id="pendingCount" style="font-family:var(--mono);font-size:10px;color:var(--text-dim)"></span>
-  </div>
-  <div style="overflow-x:auto;">
-    <table class="pending-table">
-      <thead>
-        <tr>
-          <th>Job #</th>
-          <th>Site / Name</th>
-          <th>Recipient</th>
-          <th>Entered</th>
-          <th>Auction Date</th>
-          <th>Status</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="pendingList"></tbody>
-    </table>
-  </div>
-</div>
 
 </div><!-- /opsContent -->
 
