@@ -1097,14 +1097,9 @@ function renderPending() {
     } else {
       statusHtml = `<span class="status-badge on-track">ID Received</span>`;
     }
-    const allJobs   = (hubspotProjects.groups || []).flatMap(g => g.jobs);
-    const hsMatched = jobNum ? allJobs.find(j => j.name && j.name.toUpperCase().startsWith(jobNum.toUpperCase())) : null;
-    const etMatched = jobNum ? (state.emailTracking || []).find(t => t.jobNumber && t.jobNumber.toUpperCase() === jobNum.toUpperCase()) : null;
-    const hsUrl = hsMatched
-      ? hsMatched.hubspotUrl
-      : etMatched?.hubspotId
-        ? `https://app.hubspot.com/contacts/46444696/record/0-3/${etMatched.hubspotId}`
-        : null;
+    const hsUrl = e.hubspotId
+      ? `https://app.hubspot.com/contacts/46444696/record/0-3/${e.hubspotId}`
+      : null;
     const jobCell = jobNum
       ? `${esc(jobNum)}${hsUrl ? ` <a href="${hsUrl}" target="_blank" class="hs-link" title="Open in HubSpot">↗</a>` : ''}`
       : '—';
