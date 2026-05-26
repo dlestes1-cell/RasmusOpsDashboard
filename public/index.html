@@ -1097,8 +1097,18 @@ function renderPending() {
     } else {
       statusHtml = `<span class="status-badge on-track">ID Received</span>`;
     }
+    const allJobs = (hubspotProjects.groups || []).flatMap(g => g.jobs);
+    const matched = jobNum ? allJobs.find(j => j.name && j.name.toUpperCase().startsWith(jobNum.toUpperCase())) : null;
+    const hsUrl   = matched
+      ? matched.hubspotUrl
+      : jobNum
+        ? `https://app.hubspot.com/contacts/46444696/objects/0-3/views/all/list?query=${encodeURIComponent(jobNum)}`
+        : null;
+    const jobCell = jobNum
+      ? `${esc(jobNum)}${hsUrl ? ` <a href="${hsUrl}" target="_blank" class="hs-link" title="Open in HubSpot">↗</a>` : ''}`
+      : '—';
     return `<tr id="ec-${e.id}">
-      <td class="pj-job">${esc(jobNum)}</td>
+      <td class="pj-job">${jobCell}</td>
       <td class="pj-name">${esc(siteName)}</td>
       <td class="pj-recip">${esc(e.recipient||'—')}</td>
       <td class="pj-date">${entered}</td>
