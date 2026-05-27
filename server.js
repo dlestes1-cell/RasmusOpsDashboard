@@ -225,16 +225,16 @@ app.post('/api/ai/summary', async (req, res) => {
             const recentLog = (p.activityLog || []).slice(0, 3)
               .map((e, i) => `${i + 1}. ${new Date(e.ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: ${e.text}`)
               .join('\n');
-            return `You are an assistant for Rasmus Auctions field operations. Write a concise 2-sentence operational status note for this project. Incorporate the most recent field activity if relevant.
+            return `You are a field ops coordinator at Rasmus Auctions. Give a quick 2-3 line project snapshot — what stage it's in, when the auction is, and any key detail worth flagging. Be direct, no fluff.
 
-Project: ${p.name}
-Location: ${p.location}
+Job: ${p.name}
+Location: ${p.location || 'Unknown'}
 Auction Date: ${p.date || 'TBD'}
 Stage: ${p.stage || p.status}
 Notes: ${p.notes || 'None'}
-${recentLog ? `\nRecent Field Activity:\n${recentLog}` : ''}
+${recentLog ? `Recent Activity:\n${recentLog}` : ''}
 
-Write only the 2-sentence note, no preamble.`;
+Plain text only. No bullet points, no preamble, no sign-off.`;
           })()
         }]
       })
