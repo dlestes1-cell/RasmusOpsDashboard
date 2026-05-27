@@ -882,6 +882,7 @@ let drawerProjectId = null;
 let currentDraftText = '';
 let currentDraftConfirmationId = null;
 let currentDraftEntryId = null;
+let jobSummaries = {};
 
 function connect() {
   ws = new WebSocket(`${proto}://${location.host}`);
@@ -949,7 +950,8 @@ function render() {
   renderStats();
   renderAlerts();
   renderAuctionStrip();
-  if (!hubspotProjects.total) renderProjects();
+  if (hubspotProjects.total) renderHubspotProjects();
+  else renderProjects();
   renderPending();
   renderLeaderProjects();
   if (document.getElementById('calendarPane').classList.contains('visible'))      renderCalendar();
@@ -1196,8 +1198,25 @@ async function aiSummary(projectId) {
   const btn = document.querySelector(`#pc-${projectId} .ai-btn`) || document.querySelector(`#hs-${projectId} .ai-btn`);
   const origText = btn ? btn.textContent : '✦';
   if (btn) { btn.disabled=true; btn.textContent='…'; }
-  await fetch('/api/ai/summary', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ projectId }) });
-  if (btn) { btn.disabled=false; btn.textContent=origText; }
+
+  const allJobs = (hubspotProjects.groups || []).flatMap(g => g.jobs);
+  const hsJob   = allJobs.find(j => String(j.id) === String(projectId));
+  const fallback = hsJob ? { name: hsJob.name, stage: hsJob.stage, date: hsJob.closedateRaw } : null;
+
+  try {
+    const res  = await fetch('/api/ai/summary', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, fallback })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+    if (data.text) jobSummaries[String(projectId)] = data.text;
+    if (btn) { btn.disabled=false; btn.textContent=origText; }
+    renderHubspotProjects();
+  } catch (err) {
+    console.error('[AI]', err.message);
+    if (btn) { btn.disabled=false; btn.textContent='✕'; setTimeout(() => { if (btn) btn.textContent=origText; }, 2000); }
+  }
 }
 
 async function aiDraft(confirmationId) {
@@ -1821,7 +1840,7 @@ function renderHubspotProjects() {
                             : days < 0           ? `${Math.abs(days)}d overdue`
                             : `${days}d`;
             const stateProj = (state.projects||[]).find(p => p.id === job.id);
-            const summary   = stateProj?.summaryText || '';
+            const summary   = stateProj?.summaryText || jobSummaries[String(job.id)] || '';
             return `
             <div class="job-card ${urgency}" id="hs-${job.id}">
               <div class="job-card-top">

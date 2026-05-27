@@ -204,8 +204,11 @@ app.post('/api/ai/summary', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured' });
 
-  const { projectId } = req.body;
-  const p = state.getProject(projectId);
+  const { projectId, fallback } = req.body;
+  let p = state.getProject(projectId);
+  if (!p && fallback) {
+    p = { id: projectId, name: fallback.name || 'Unknown', stage: fallback.stage || '', date: fallback.date || '', location: '', notes: '', activityLog: [] };
+  }
   if (!p) return res.status(404).json({ error: 'Project not found' });
 
   try {
@@ -241,8 +244,10 @@ Plain text only. No bullet points, no preamble, no sign-off.`;
     });
     const data = await r.json();
     const text = data.content?.[0]?.text || '';
-    state.updateProject(projectId, { summaryText: text });
-    broadcast();
+    if (state.getProject(projectId)) {
+      state.updateProject(projectId, { summaryText: text });
+      broadcast();
+    }
     res.json({ text });
   } catch (e) {
     res.status(500).json({ error: e.message });
