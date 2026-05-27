@@ -282,6 +282,41 @@ async function runHubSpotSync() {
       console.error('[TASK] Contact fetch error:', e.message);
     }
 
+    // Enrich triage_poc from associated Prospect deals where missing
+    const needsTriage = deals.filter(d => !d.properties.triage_poc);
+    if (needsTriage.length) {
+      try {
+        const assocRes  = await fetch(`${HUBSPOT_API}/crm/v4/associations/deals/deals/batch/read`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hsKey}` },
+          body: JSON.stringify({ inputs: needsTriage.map(d => ({ id: d.id })) })
+        });
+        const assocData = await assocRes.json();
+        const dealAssocMap = {};
+        (assocData.results || []).forEach(r => {
+          dealAssocMap[r.from.id] = (r.to || []).map(t => String(t.toObjectId));
+        });
+        const assocIds = [...new Set(Object.values(dealAssocMap).flat())];
+        if (assocIds.length) {
+          const batchRes  = await fetch(`${HUBSPOT_API}/crm/v3/objects/deals/batch/read`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hsKey}` },
+            body: JSON.stringify({ inputs: assocIds.map(id => ({ id })), properties: ['triage_poc'] })
+          });
+          const batchData = await batchRes.json();
+          const triageMap = {};
+          (batchData.results || []).forEach(d => { if (d.properties?.triage_poc) triageMap[d.id] = d.properties.triage_poc; });
+          needsTriage.forEach(deal => {
+            for (const aid of (dealAssocMap[deal.id] || [])) {
+              if (triageMap[aid]) { deal.properties.triage_poc = triageMap[aid]; break; }
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('[TASK] Triage POC enrichment failed:', e.message);
+      }
+    }
+
     const today    = localDateKey();
     const projects = deals.map(deal => {
       const p     = deal.properties;
@@ -298,6 +333,8 @@ async function runHubSpotSync() {
       const enumLabel     = leaderEnums[rawLeader] || '';
       const ownerFromDeal = ownerMap[String(p.hubspot_owner_id || '')] || '';
       const leader        = normalizeLeader(ownerFromPL) || normalizeLeader(enumLabel) || normalizeLeader(ownerFromDeal) || normalizeLeader(rawLeader);
+      const triagePocId   = p.triage_poc || '';
+      const triagePoc     = triagePocId ? (ownerMap[triagePocId] || triagePocId) : '';
       return {
         id:           String(deal.id),
         hubspotId:    String(deal.id),
@@ -308,6 +345,7 @@ async function runHubSpotSync() {
         status:       stageToStatus(stage),
         stage,
         leader,
+        triagePoc,
         notes:        p.description || '',
         summaryText:  '',
         amount:       p.marketing_projected_sales || p.amount || '',

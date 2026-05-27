@@ -579,6 +579,49 @@ app.get('/api/hubspot-active-projects', async (req, res) => {
       return cd.split('T')[0] >= today;
     });
 
+    // Enrich triage_poc from associated Prospect deals where the active deal has none
+    const needsTriage = filtered.filter(d => !d.properties.triage_poc);
+    if (needsTriage.length) {
+      try {
+        // 1. Batch-fetch deal→deal associations
+        const assocRes  = await fetch('https://api.hubapi.com/crm/v4/associations/deals/deals/batch/read', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hsKey}` },
+          body: JSON.stringify({ inputs: needsTriage.map(d => ({ id: d.id })) })
+        });
+        const assocData = await assocRes.json();
+
+        const dealAssocMap = {};
+        (assocData.results || []).forEach(r => {
+          dealAssocMap[r.from.id] = (r.to || []).map(t => String(t.toObjectId));
+        });
+
+        // 2. Batch-read triage_poc from all associated deals
+        const assocIds = [...new Set(Object.values(dealAssocMap).flat())];
+        if (assocIds.length) {
+          const batchRes  = await fetch('https://api.hubapi.com/crm/v3/objects/deals/batch/read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hsKey}` },
+            body: JSON.stringify({ inputs: assocIds.map(id => ({ id })), properties: ['triage_poc'] })
+          });
+          const batchData = await batchRes.json();
+          const triageMap = {};
+          (batchData.results || []).forEach(d => {
+            if (d.properties?.triage_poc) triageMap[d.id] = d.properties.triage_poc;
+          });
+
+          // Back-fill active deals
+          needsTriage.forEach(deal => {
+            for (const aid of (dealAssocMap[deal.id] || [])) {
+              if (triageMap[aid]) { deal.properties.triage_poc = triageMap[aid]; break; }
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('[HUBSPOT] Triage POC enrichment failed:', e.message);
+      }
+    }
+
     const deals = filtered.map(deal => {
       const p         = deal.properties;
       const leaderId  = p.project_leader;

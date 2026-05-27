@@ -1716,6 +1716,14 @@ function openJobDrawer(projectId) {
   document.getElementById('drawerNotes').textContent    = p.notes || '—';
   document.getElementById('drawerAISummary').textContent = p.summaryText || '—';
 
+  const triageRow = document.getElementById('drawerTriageRow');
+  if (p.triagePoc) {
+    document.getElementById('drawerTriagePoc').textContent = p.triagePoc;
+    triageRow.style.display = '';
+  } else {
+    triageRow.style.display = 'none';
+  }
+
   const contact = document.getElementById('drawerContact');
   if (p.contactName || p.contactPhone || p.contactEmail) {
     contact.innerHTML = `
@@ -1904,6 +1912,10 @@ setInterval(loadHubspotProjects, 5 * 60 * 1000);
     <div class="drawer-section">
       <div class="drawer-section-label">Contact</div>
       <div class="drawer-contact-grid" id="drawerContact"></div>
+    </div>
+    <div class="drawer-section" id="drawerTriageRow" style="display:none">
+      <div class="drawer-section-label">Triage POC</div>
+      <div class="drawer-section-value" id="drawerTriagePoc"></div>
     </div>
     <div class="drawer-section">
       <div class="drawer-section-label">Notes</div>
