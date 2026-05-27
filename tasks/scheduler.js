@@ -60,6 +60,12 @@ function daysBefore(n) {
   return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
 }
 
+function localDateKey(date = new Date()) {
+  const d = new Date(date);
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
+
 // Leader display name → email (pulled from HubSpot owner data at startup)
 const LEADER_EMAILS = {};
 
@@ -134,7 +140,7 @@ async function buildLeaderEnums() {
 // ── Leader Projects sync (called from HubSpot sync) ──────────
 function syncLeaderProjects(deals) {
   const APRIL_1 = '2026-04-01';
-  const today   = new Date().toISOString().slice(0, 10);
+  const today   = localDateKey();
 
   // Include all deals with closedate >= April 1 (past-dated ones are hidden
   // on the frontend; only truly expired deals get removed from the board)
@@ -276,7 +282,7 @@ async function runHubSpotSync() {
       console.error('[TASK] Contact fetch error:', e.message);
     }
 
-    const today    = new Date().toISOString().slice(0, 10);
+    const today    = localDateKey();
     const projects = deals.map(deal => {
       const p     = deal.properties;
       const stage = stageMap[p.dealstage] || p.dealstage || 'Unknown';
@@ -422,7 +428,7 @@ async function runDailyDigest() {
   const hasGmail = process.env.GMAIL_REFRESH_TOKEN && process.env.GMAIL_CLIENT_ID;
   if (!hasGmail) { console.log('[DIGEST] No Gmail credentials — skipping'); return; }
 
-  const today     = new Date().toISOString().slice(0, 10);
+  const today     = localDateKey();
   const dateLabel = new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
   const projects  = getProjects();
   const leaders   = getLeaderProjects();
@@ -519,7 +525,7 @@ async function runOverdueDraft() {
 
 // ── Confirmation sync (called from HubSpot sync) ─────────────
 function syncConfirmations(deals, contactMap) {
-  const today    = new Date().toISOString().slice(0, 10);
+  const today    = localDateKey();
   const existing = getConfirmations();
   const existingByHubspotId = Object.fromEntries(existing.filter(c => c.hubspotId).map(c => [c.hubspotId, c]));
 
@@ -537,11 +543,20 @@ function syncConfirmations(deals, contactMap) {
 
     const existing = existingByHubspotId[String(deal.id)];
     if (existing) {
+      const patch = {
+        site:        siteName,
+        recipient:   contact.contactEmail || existing.recipient || '',
+        project:     p.dealname || existing.project || '',
+        removalDate: closeDate
+      };
+
       // Update completedAt if ID date is now available and wasn't set before
       if (idDate && (!existing.idDateSet)) {
-        updateConfirmation(existing.id, { completedAt: idDate, idDateSet: true });
+        patch.completedAt = idDate;
+        patch.idDateSet = true;
         console.log(`[CONF] ID date set for: ${siteName}`);
       }
+      updateConfirmation(existing.id, patch);
       return;
     }
 
@@ -638,12 +653,20 @@ async function runEmailGmailScan() {
     return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
   })();
 
-  const fromQuery = leaderEntries.map(([, email]) => `from:${email}`).join(' OR ');
-  const query     = `(${fromQuery}) (subject:"identification complete" OR subject:"removal complete") after:${ninetyAgo}`;
-  console.log(`[EMAIL-SCAN] Searching Gmail: ${query}`);
+  // Search leader-sent AND dashboard-sent (in:sent from destes@rasmus.com)
+  const fromQuery  = leaderEntries.map(([, email]) => `from:${email}`).join(' OR ');
+  const sentQuery  = `in:sent (subject:"identification complete" OR subject:"removal complete") after:${ninetyAgo}`;
+  const leaderQuery = `(${fromQuery}) (subject:"identification complete" OR subject:"removal complete") after:${ninetyAgo}`;
 
-  const messages = await gmail.searchMessages(query, 100);
-  console.log(`[EMAIL-SCAN] Found ${messages.length} messages`);
+  const [leaderMsgs, sentMsgs] = await Promise.all([
+    gmail.searchMessages(leaderQuery, 100),
+    gmail.searchMessages(sentQuery, 100)
+  ]);
+
+  // Deduplicate by message ID
+  const seen = new Set();
+  const messages = [...leaderMsgs, ...sentMsgs].filter(m => seen.has(m.id) ? false : (seen.add(m.id), true));
+  console.log(`[EMAIL-SCAN] Found ${messages.length} messages (${leaderMsgs.length} leader, ${sentMsgs.length} sent)`);
   if (!messages.length) return;
 
   let matched = 0;
@@ -651,14 +674,12 @@ async function runEmailGmailScan() {
     const meta = await gmail.getMessageMetadata(msg.id);
     if (!meta) continue;
 
-    // Determine type from subject phrase
     const subjectLower = meta.subject.toLowerCase();
     let type = null;
     if (subjectLower.includes('identification complete')) type = 'identification';
     else if (subjectLower.includes('removal complete'))   type = 'removal';
     if (!type) continue;
 
-    // Identify which leader sent this
     const leaderMatch = leaderEntries.find(([, email]) => meta.from.toLowerCase().includes(email.toLowerCase()));
     const leaderName  = leaderMatch ? leaderMatch[0] : null;
 
@@ -666,11 +687,28 @@ async function runEmailGmailScan() {
     const jnMatch = meta.subject.match(/R(\d+)/i);
     const subjectJobNum = jnMatch ? `R${jnMatch[1]}` : null;
 
-    // Match by job number first (most reliable), then fall back to leader+time match
+    // Strip "Identification Complete - R12345 | " prefix to isolate deal name
+    const subjectDealPart = meta.subject
+      .replace(/^(identification complete|removal complete)\s*[-–|:]+\s*/i, '')
+      .replace(/^R\d+\s*[|:]\s*/i, '')
+      .toLowerCase()
+      .trim();
+
     let entry = null;
+
+    // 1. Match by job number (most reliable)
     if (subjectJobNum) {
-      entry = unsent.find(e => !e.sent && e.type === type && e.jobNumber && e.jobNumber.toUpperCase() === subjectJobNum.toUpperCase());
+      entry = unsent.find(e => !e.sent && e.type === type && e.jobNumber &&
+        e.jobNumber.toUpperCase() === subjectJobNum.toUpperCase());
     }
+
+    // 2. Match by deal name substring in subject (catches emails sent by dashboard for any leader)
+    if (!entry && subjectDealPart.length >= 5) {
+      entry = unsent.find(e => !e.sent && e.type === type && e.name &&
+        subjectDealPart.includes(e.name.toLowerCase().slice(0, 20)));
+    }
+
+    // 3. Fall back: leader + time window (leader's own emails)
     if (!entry && leaderName) {
       const candidates = unsent.filter(e =>
         !e.sent && e.type === type && e.leader === leaderName &&
@@ -681,7 +719,7 @@ async function runEmailGmailScan() {
 
     if (entry) {
       updateEmailTracking(entry.id, { sent: true, sentAt: meta.internalDate, flagged: false, autoDetected: true });
-      console.log(`[EMAIL-SCAN] Auto-marked sent: ${leaderName || 'unknown'} → ${entry.jobNumber} (${entry.type}) at ${new Date(meta.internalDate).toLocaleString()}`);
+      console.log(`[EMAIL-SCAN] Auto-marked sent: ${leaderName || 'unknown'} → ${entry.jobNumber || entry.name} (${entry.type}) at ${new Date(meta.internalDate).toLocaleString()}`);
       matched++;
     } else {
       console.log(`[EMAIL-SCAN] No match for: "${meta.subject}" from ${meta.from}`);
