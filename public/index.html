@@ -548,6 +548,13 @@
   }
   .hs-link:hover { color: var(--gold); }
 
+  .hs-job-summary {
+    font-size: 11px; color: var(--text-mid);
+    line-height: 1.45; margin-top: 2px;
+    overflow: hidden; display: -webkit-box;
+    -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  }
+
   .job-card-meta {
     display: flex; align-items: center;
     gap: 8px; flex-wrap: wrap;
@@ -1186,7 +1193,7 @@ async function submitLog(projectId) {
 
 
 async function aiSummary(projectId) {
-  const btn = document.querySelector(`#pc-${projectId} .ai-btn`);
+  const btn = document.querySelector(`#pc-${projectId} .ai-btn`) || document.querySelector(`#hs-${projectId} .ai-btn`);
   const origText = btn ? btn.textContent : '✦';
   if (btn) { btn.disabled=true; btn.textContent='…'; }
   await fetch('/api/ai/summary', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ projectId }) });
@@ -1813,17 +1820,23 @@ function renderHubspotProjects() {
                             : days === 1         ? 'Tomorrow'
                             : days < 0           ? `${Math.abs(days)}d overdue`
                             : `${days}d`;
+            const stateProj = (state.projects||[]).find(p => p.id === job.id);
+            const summary   = stateProj?.summaryText || '';
             return `
-            <div class="job-card ${urgency}">
+            <div class="job-card ${urgency}" id="hs-${job.id}">
               <div class="job-card-top">
                 <div class="job-name">${job.name}</div>
-                <a href="${job.hubspotUrl}" target="_blank" class="hs-link" title="Open in HubSpot">↗</a>
+                <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+                  <button class="ai-btn" style="padding:2px 7px;font-size:9px" onclick="event.stopPropagation();aiSummary('${job.id}')" title="${summary ? 'Refresh summary' : 'Generate summary'}">✦</button>
+                  <a href="${job.hubspotUrl}" target="_blank" class="hs-link" title="Open in HubSpot">↗</a>
+                </div>
               </div>
               <div class="job-card-meta">
                 <span class="stage-badge ${stageClass(job.stage)}">${job.stage}</span>
                 <span class="job-date ${urgency}">${daysLabel}</span>
                 ${job.triagePoc ? `<span class="triage-poc">⚑ ${job.triagePoc}</span>` : ''}
               </div>
+              ${summary ? `<div class="hs-job-summary">${esc(summary)}</div>` : ''}
             </div>`;
           }).join('')}
         </div>
