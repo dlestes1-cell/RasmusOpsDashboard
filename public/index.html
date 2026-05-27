@@ -942,7 +942,7 @@ function render() {
   renderStats();
   renderAlerts();
   renderAuctionStrip();
-  renderProjects();
+  if (!hubspotProjects.total) renderProjects();
   renderPending();
   renderLeaderProjects();
   if (document.getElementById('calendarPane').classList.contains('visible'))      renderCalendar();
@@ -1647,9 +1647,12 @@ function lpCard(p, today) {
 function toggleForm(id) {
   const f = document.getElementById(id);
   f.classList.toggle('open');
-  if (id==='addEmail' && f.classList.contains('open')) {
-    const n = new Date(); n.setMinutes(n.getMinutes()-n.getTimezoneOffset());
-    document.getElementById('eCompleted').value = n.toISOString().slice(0,16);
+  if (f.classList.contains('open')) {
+    f.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (id === 'addEmail') {
+      const n = new Date(); n.setMinutes(n.getMinutes()-n.getTimezoneOffset());
+      document.getElementById('eCompleted').value = n.toISOString().slice(0,16);
+    }
   }
 }
 function set(id, val) { document.getElementById(id).textContent = val; }
