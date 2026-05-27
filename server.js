@@ -498,6 +498,55 @@ app.get('/api/sync/debug', async (req, res) => {
   }
 });
 
+// ── Triage POC debug — inspect one deal's associations ───────────
+app.get('/api/sync/triage-debug/:dealId', async (req, res) => {
+  const hsKey = process.env.HUBSPOT_API_KEY;
+  if (!hsKey) return res.status(503).json({ error: 'No HUBSPOT_API_KEY' });
+  const { dealId } = req.params;
+  try {
+    // Raw triage_poc value on this deal
+    const dealRes  = await fetch(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}?properties=triage_poc,dealname,dealstage,pipeline`, {
+      headers: { Authorization: `Bearer ${hsKey}` }
+    });
+    const dealData = await dealRes.json();
+
+    // v4 deal-to-deal associations
+    const v4Res  = await fetch(`https://api.hubapi.com/crm/v4/objects/deals/${dealId}/associations/deals`, {
+      headers: { Authorization: `Bearer ${hsKey}` }
+    });
+    const v4Data = await v4Res.json();
+
+    // v4 deal-to-contact associations (in case triage_poc is stored differently)
+    const ctRes  = await fetch(`https://api.hubapi.com/crm/v4/objects/deals/${dealId}/associations/contacts`, {
+      headers: { Authorization: `Bearer ${hsKey}` }
+    });
+    const ctData = await ctRes.json();
+
+    // If any associated deals, fetch their triage_poc
+    const assocDealIds = (v4Data.results || []).map(r => r.toObjectId);
+    let assocDealProps = [];
+    if (assocDealIds.length) {
+      const batchRes  = await fetch('https://api.hubapi.com/crm/v3/objects/deals/batch/read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hsKey}` },
+        body: JSON.stringify({ inputs: assocDealIds.map(id => ({ id: String(id) })), properties: ['triage_poc','dealname','pipeline','dealstage'] })
+      });
+      const batchData = await batchRes.json();
+      assocDealProps = (batchData.results || []).map(d => ({ id: d.id, ...d.properties }));
+    }
+
+    res.json({
+      deal:          { id: dealId, ...dealData.properties },
+      assocDealIds,
+      assocDealProps,
+      assocContactIds: (ctData.results || []).map(r => r.toObjectId),
+      v4Raw:         v4Data
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── HubSpot Active Projects ───────────────────────────────────
 app.get('/api/hubspot-active-projects', async (req, res) => {
   const hsKey = process.env.HUBSPOT_API_KEY;
