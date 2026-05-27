@@ -44,7 +44,7 @@ beforeEach(() => {
   stateMocks.deleteLeaderProject = jest.fn();
 });
 
-const { normalizeLeader, stageToStatus, runConfirmationCheck } = require('../tasks/scheduler');
+const { normalizeLeader, stageToStatus, runConfirmationCheck, syncConfirmations } = require('../tasks/scheduler');
 
 // ── normalizeLeader ───────────────────────────────────────────────
 
@@ -193,5 +193,47 @@ describe('runConfirmationCheck', () => {
     runConfirmationCheck();
     expect(stateMocks.updateConfirmation).not.toHaveBeenCalled();
     expect(stateMocks.addAlert).not.toHaveBeenCalled();
+  });
+});
+
+// ── syncConfirmations ─────────────────────────────────────────────
+
+describe('syncConfirmations', () => {
+  test('refreshes HubSpot-backed fields on existing confirmations', () => {
+    stateMocks.getConfirmations.mockReturnValue([
+      {
+        id: 'conf-1',
+        hubspotId: 'deal-1',
+        site: 'R1 — Old Name',
+        recipient: 'old@example.com',
+        project: 'R1 Old Name',
+        completedAt: 0,
+        idDateSet: false,
+        removalDate: '2026-06-01'
+      }
+    ]);
+
+    syncConfirmations([
+      {
+        id: 'deal-1',
+        properties: {
+          dealstage: 'New Auction',
+          dealname: 'R1 New Name',
+          closedate: '2026-06-15T00:00:00.000Z',
+          hs_date_entered_249570210: '2026-05-20T14:00:00.000Z'
+        }
+      }
+    ], {
+      'deal-1': { contactEmail: 'new@example.com' }
+    });
+
+    expect(stateMocks.updateConfirmation).toHaveBeenCalledWith('conf-1', expect.objectContaining({
+      site: 'R1 — New Name',
+      recipient: 'new@example.com',
+      project: 'R1 New Name',
+      removalDate: '2026-06-15',
+      idDateSet: true,
+      completedAt: expect.any(Number)
+    }));
   });
 });

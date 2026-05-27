@@ -13,19 +13,19 @@ let state = {
   projects: [
     {
       id: uid(), name: 'Henderson Estate', location: 'Fredericksburg, VA',
-      date: '2026-05-22', status: 'on-track',
+      date: '2026-05-22', status: 'identification',
       notes: 'Full household — 3-day pack', summaryText: '',
       createdAt: now()
     },
     {
       id: uid(), name: 'Coastal Marine Surplus', location: 'Annapolis, MD',
-      date: '2026-05-18', status: 'at-risk',
+      date: '2026-05-18', status: 'selling-online',
       notes: 'Awaiting transport permits', summaryText: '',
       createdAt: now()
     },
     {
       id: uid(), name: 'Capitol Industrial Lot 7', location: 'Richmond, VA',
-      date: '2026-05-30', status: 'on-track',
+      date: '2026-05-30', status: 'identification',
       notes: 'Machinery appraisals in progress', summaryText: '',
       createdAt: now()
     }

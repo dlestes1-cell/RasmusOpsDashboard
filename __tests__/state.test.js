@@ -14,7 +14,7 @@ describe('projects', () => {
 
   test('addProject creates a project with defaults', () => {
     const before = state.getProjects().length;
-    state.addProject({ name: 'Test Job', location: 'VA', date: '2026-06-01', status: 'on-track' });
+    state.addProject({ name: 'Test Job', location: 'VA', date: '2026-06-01', status: 'identification' });
     expect(state.getProjects().length).toBe(before + 1);
     const p = state.getProjects().find(p => p.name === 'Test Job');
     expect(p.activityLog).toEqual([]);
@@ -31,11 +31,11 @@ describe('projects', () => {
   });
 
   test('updateProject patches fields', () => {
-    state.addProject({ name: 'Patch Me', status: 'on-track' });
+    state.addProject({ name: 'Patch Me', status: 'identification' });
     const p = state.getProjects().find(p => p.name === 'Patch Me');
-    state.updateProject(p.id, { status: 'at-risk', notes: 'urgent' });
+    state.updateProject(p.id, { status: 'selling-online', notes: 'urgent' });
     const updated = state.getProject(p.id);
-    expect(updated.status).toBe('at-risk');
+    expect(updated.status).toBe('selling-online');
     expect(updated.notes).toBe('urgent');
     expect(updated.name).toBe('Patch Me');
   });
@@ -48,7 +48,7 @@ describe('projects', () => {
 
   test('deleteProject removes the project', () => {
     const before = state.getProjects().length;
-    state.addProject({ name: 'Remove Me', status: 'on-track' });
+    state.addProject({ name: 'Remove Me', status: 'identification' });
     const p = state.getProjects().find(p => p.name === 'Remove Me');
     state.deleteProject(p.id);
     expect(state.getProjects().length).toBe(before);
@@ -73,7 +73,7 @@ describe('projects', () => {
   });
 
   test('setProjects replaces project list', () => {
-    state.setProjects([{ id: 'x1', name: 'Only One', status: 'on-track', activityLog: [], contactName: '', contactPhone: '', contactEmail: '' }]);
+    state.setProjects([{ id: 'x1', name: 'Only One', status: 'identification', activityLog: [], contactName: '', contactPhone: '', contactEmail: '' }]);
     expect(state.getProjects().length).toBe(1);
     expect(state.getProject('x1').name).toBe('Only One');
   });
@@ -81,14 +81,14 @@ describe('projects', () => {
   test('setProjects preserves activityLog from existing project', () => {
     const existing = state.getProjects()[0];
     state.addActivityLog(existing.id, 'preserve me');
-    state.setProjects([{ id: existing.id, name: existing.name, status: 'at-risk', activityLog: [], contactName: '', contactPhone: '', contactEmail: '' }]);
+    state.setProjects([{ id: existing.id, name: existing.name, status: 'selling-online', activityLog: [], contactName: '', contactPhone: '', contactEmail: '' }]);
     expect(state.getProject(existing.id).activityLog[0].text).toBe('preserve me');
   });
 
   test('setProjects preserves contact info when incoming is empty', () => {
     const existing = state.getProjects()[0];
     state.updateProject(existing.id, { contactName: 'Jane Smith', contactPhone: '555-9876', contactEmail: 'jane@example.com' });
-    state.setProjects([{ id: existing.id, name: existing.name, status: 'on-track', activityLog: [], contactName: '', contactPhone: '', contactEmail: '' }]);
+    state.setProjects([{ id: existing.id, name: existing.name, status: 'identification', activityLog: [], contactName: '', contactPhone: '', contactEmail: '' }]);
     const p = state.getProject(existing.id);
     expect(p.contactName).toBe('Jane Smith');
     expect(p.contactPhone).toBe('555-9876');
@@ -98,7 +98,7 @@ describe('projects', () => {
   test('setProjects uses incoming contact info when provided', () => {
     const existing = state.getProjects()[0];
     state.updateProject(existing.id, { contactName: 'Old Name' });
-    state.setProjects([{ id: existing.id, name: existing.name, status: 'on-track', activityLog: [], contactName: 'New Name', contactPhone: '', contactEmail: '' }]);
+    state.setProjects([{ id: existing.id, name: existing.name, status: 'identification', activityLog: [], contactName: 'New Name', contactPhone: '', contactEmail: '' }]);
     expect(state.getProject(existing.id).contactName).toBe('New Name');
   });
 });
