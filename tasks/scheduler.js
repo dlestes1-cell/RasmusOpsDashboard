@@ -639,12 +639,17 @@ function syncEmailTracking(projects) {
     // Deals still in Identification/ID In-process are not done yet — don't track them
     if (isPastId || p.idEnteredAt) {
       const key = `identification:${p.hubspotId}`;
-      const triggeredAt = p.idEnteredAt || null;
+      const triggeredAt          = p.idEnteredAt || Date.now();
+      const triggeredAtEstimated = !p.idEnteredAt;
       if (!byKey[key]) {
-        addEmailTracking({ type:'identification', hubspotId:p.hubspotId, jobNumber:p.jobNumber, name:p.name, leader:p.leader||'', triggeredAt });
+        addEmailTracking({ type:'identification', hubspotId:p.hubspotId, jobNumber:p.jobNumber, name:p.name, leader:p.leader||'', triggeredAt, triggeredAtEstimated });
       } else {
         const updates = { name:p.name, leader:p.leader||'' };
-        if (p.idEnteredAt && !byKey[key].triggeredAt) updates.triggeredAt = p.idEnteredAt;
+        // Upgrade from estimated → real date if HubSpot now provides it
+        if (p.idEnteredAt && (!byKey[key].triggeredAt || byKey[key].triggeredAtEstimated)) {
+          updates.triggeredAt = p.idEnteredAt;
+          updates.triggeredAtEstimated = false;
+        }
         updateEmailTracking(byKey[key].id, updates);
       }
     }
@@ -652,10 +657,17 @@ function syncEmailTracking(projects) {
     // Post-Removal: projects currently in reconciliation/removal stage
     if (p.status === 'removal') {
       const key = `removal:${p.hubspotId}`;
+      const remTriggeredAt          = p.removalEnteredAt || Date.now();
+      const remTriggeredAtEstimated = !p.removalEnteredAt;
       if (!byKey[key]) {
-        addEmailTracking({ type:'removal', hubspotId:p.hubspotId, jobNumber:p.jobNumber, name:p.name, leader:p.leader||'', triggeredAt:p.removalEnteredAt || null });
+        addEmailTracking({ type:'removal', hubspotId:p.hubspotId, jobNumber:p.jobNumber, name:p.name, leader:p.leader||'', triggeredAt:remTriggeredAt, triggeredAtEstimated:remTriggeredAtEstimated });
       } else {
-        updateEmailTracking(byKey[key].id, { name:p.name, leader:p.leader||'' });
+        const updates = { name:p.name, leader:p.leader||'' };
+        if (p.removalEnteredAt && (!byKey[key].triggeredAt || byKey[key].triggeredAtEstimated)) {
+          updates.triggeredAt = p.removalEnteredAt;
+          updates.triggeredAtEstimated = false;
+        }
+        updateEmailTracking(byKey[key].id, updates);
       }
     }
   });

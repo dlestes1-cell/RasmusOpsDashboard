@@ -852,6 +852,7 @@
       <span class="dot" style="background:var(--blue)"></span>
       <span class="et-section-title">Post-Identification Emails</span>
       <span class="et-section-count" id="etIdCount"></span>
+      <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-left:8px">* = date estimated (HubSpot not returning ID date)</span>
       <button class="et-sent-btn" style="margin-left:auto;background:var(--surface3);color:var(--text-mid);font-size:9px" onclick="markAllSent('identification')" id="etIdMarkAll">✓ Mark All Sent</button>
     </div>
     <div style="overflow-x:auto"><table class="et-table"><thead><tr>
@@ -1396,18 +1397,24 @@ function renderEmailTracking() {
   const now     = Date.now();
 
   function windowLabel(e) {
-    if (e.sent) return { cls:'sent', text:`${e.autoDetected ? '⟳ ' : '✓ '}Sent ${new Date(e.sentAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}` };
-    if (!e.triggeredAt) return { cls:'warning', text:'Date Unknown' };
+    const fmtDate = ts => new Date(ts).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+    const est     = e.triggeredAtEstimated ? '*' : '';
+    if (e.sent) {
+      const sentStr = e.sentAt ? new Date(e.sentAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : 'unknown date';
+      return { cls:'sent', text:`${e.autoDetected ? '⟳ ' : '✓ '}Sent ${sentStr}` };
+    }
+    if (!e.triggeredAt) return { cls:'warning', text:'ID Date Unknown' };
     const elapsed = now - e.triggeredAt;
+    const idStr   = fmtDate(e.triggeredAt) + est;
     if (elapsed > WINDOW) {
-      const h = Math.floor((elapsed - WINDOW) / 3600000);
-      return { cls:'overdue', text:`OVERDUE +${h}h` };
+      const days = Math.floor(elapsed / 86400000);
+      return { cls:'overdue', text:`⚠ OVERDUE — ID'd ${idStr}${days > 1 ? ` (${days}d ago)` : ''}` };
     }
     const remaining = WINDOW - elapsed;
-    const h = Math.floor(remaining / 3600000);
-    const m = Math.floor((remaining % 3600000) / 60000);
+    const h   = Math.floor(remaining / 3600000);
+    const m   = Math.floor((remaining % 3600000) / 60000);
     const cls = remaining < 3 * 3600000 ? 'warning' : 'ok';
-    return { cls, text:`${h}h ${m}m remaining` };
+    return { cls, text:`ID'd ${idStr} · ${h}h ${m}m left` };
   }
 
   function buildRow(e) {
