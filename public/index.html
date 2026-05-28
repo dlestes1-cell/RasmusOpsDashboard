@@ -380,6 +380,8 @@
   .et-table tr:last-child td { border-bottom:none; }
   .et-table tr:hover td { background:var(--surface2); }
   .et-table tr.et-sent td { opacity:.5; }
+  .et-table tr.et-overdue { border-left:3px solid var(--red); }
+  .et-table tr.et-overdue td:first-child { padding-left:9px; }
   .et-job     { font-family:var(--mono); font-size:11px; color:var(--text-dim); white-space:nowrap; }
   .et-name    { font-weight:600; color:var(--text); }
   .et-leader  { font-family:var(--mono); font-size:11px; color:var(--text-mid); }
@@ -850,6 +852,7 @@
       <span class="dot" style="background:var(--blue)"></span>
       <span class="et-section-title">Post-Identification Emails</span>
       <span class="et-section-count" id="etIdCount"></span>
+      <button class="et-sent-btn" style="margin-left:auto;background:var(--surface3);color:var(--text-mid);font-size:9px" onclick="markAllSent('identification')" id="etIdMarkAll">✓ Mark All Sent</button>
     </div>
     <div style="overflow-x:auto"><table class="et-table"><thead><tr>
       <th>Job #</th><th>Name</th><th>Leader</th><th>ID Date</th><th>Status</th><th>Actions</th>
@@ -860,6 +863,7 @@
       <span class="dot" style="background:var(--red)"></span>
       <span class="et-section-title">Post-Removal Emails</span>
       <span class="et-section-count" id="etRemovalCount"></span>
+      <button class="et-sent-btn" style="margin-left:auto;background:var(--surface3);color:var(--text-mid);font-size:9px" onclick="markAllSent('removal')" id="etRemovalMarkAll">✓ Mark All Sent</button>
     </div>
     <div style="overflow-x:auto"><table class="et-table"><thead><tr>
       <th>Job #</th><th>Name</th><th>Leader</th><th>Removal Date</th><th>Status</th><th>Actions</th>
@@ -1407,17 +1411,19 @@ function renderEmailTracking() {
   }
 
   function buildRow(e) {
-    const w   = windowLabel(e);
-    const cls = e.sent ? 'et-sent' : '';
-    return `<tr class="${cls}">
+    const w       = windowLabel(e);
+    const isOver  = !e.sent && e.triggeredAt && (now - e.triggeredAt) > WINDOW;
+    const rowCls  = e.sent ? 'et-sent' : isOver ? 'et-overdue' : '';
+    const nameCel = isOver ? `⚠ ${esc(e.name)}` : esc(e.name);
+    return `<tr class="${rowCls}">
       <td class="et-job">${esc(e.jobNumber||'—')}</td>
-      <td class="et-name">${esc(e.name)}</td>
+      <td class="et-name" style="${isOver ? 'color:var(--red)' : ''}">${nameCel}</td>
       <td class="et-leader">${esc(e.leader||'—')}</td>
       <td class="et-job">${e.triggeredAt ? new Date(e.triggeredAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '—'}</td>
       <td class="et-window ${w.cls}">${w.text}</td>
       <td class="et-actions">
         ${!e.sent ? `<button class="draft-btn" onclick="etDraftEmail('${e.id}')">✦ Draft</button>` : ''}
-        ${!e.sent ? `<button class="et-sent-btn" onclick="markEmailSent('${e.id}')">✓ Mark Sent</button>` : ''}
+        ${!e.sent ? `<button class="et-sent-btn" style="${isOver ? 'background:var(--red)' : ''}" onclick="markEmailSent('${e.id}')">✓ Mark Sent</button>` : ''}
         <button class="et-dismiss-btn" onclick="dismissEmailEntry('${e.id}')">✕</button>
       </td>
     </tr>`;
@@ -1451,6 +1457,19 @@ async function markEmailSent(id) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ sent: true, sentAt: Date.now(), flagged: false })
   });
+}
+
+async function markAllSent(type) {
+  const entries = (state.emailTracking || []).filter(e => e.type === type && !e.sent);
+  if (!entries.length) return;
+  if (!confirm(`Mark all ${entries.length} unsent ${type} email${entries.length !== 1 ? 's' : ''} as sent?`)) return;
+  await Promise.all(entries.map(e =>
+    fetch(`/api/email-tracking/${e.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sent: true, sentAt: Date.now(), flagged: false })
+    })
+  ));
 }
 
 async function dismissEmailEntry(id) {
