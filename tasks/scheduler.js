@@ -317,6 +317,34 @@ async function runHubSpotSync() {
       }
     }
 
+    // Fetch dealstage history to get accurate Identification entry dates
+    // (hs_date_entered_249570210 is null for most deals; history is authoritative)
+    const idEnteredAtMap = {};
+    try {
+      const chunkSize = 100;
+      for (let i = 0; i < deals.length; i += chunkSize) {
+        const chunk    = deals.slice(i, i + chunkSize);
+        const batchRes = await fetch(`${HUBSPOT_API}/crm/v3/objects/deals/batch/read`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hsKey}` },
+          body: JSON.stringify({
+            inputs: chunk.map(d => ({ id: d.id })),
+            propertiesWithHistory: ['dealstage']
+          })
+        });
+        const batchData = await batchRes.json();
+        (batchData.results || []).forEach(d => {
+          const history = d.propertiesWithHistory?.dealstage || [];
+          // Most recent entry where value === '249570210' (Identification stage)
+          const hit = history.find(h => h.value === '249570210');
+          if (hit) idEnteredAtMap[d.id] = new Date(hit.timestamp).getTime();
+        });
+      }
+      console.log(`[TASK] ID entry dates from stage history: ${Object.keys(idEnteredAtMap).length} deals`);
+    } catch (e) {
+      console.warn('[TASK] Stage history fetch failed:', e.message);
+    }
+
     const today    = localDateKey();
     const projects = deals.map(deal => {
       const p     = deal.properties;
@@ -352,7 +380,7 @@ async function runHubSpotSync() {
         contactName:  contact.contactName  || '',
         contactPhone: contact.contactPhone || '',
         contactEmail: contact.contactEmail || '',
-        idEnteredAt:  p.hs_date_entered_249570210 ? new Date(p.hs_date_entered_249570210).getTime() : null,
+        idEnteredAt:  idEnteredAtMap[deal.id] || (p.hs_date_entered_249570210 ? new Date(p.hs_date_entered_249570210).getTime() : null),
         createdAt:    Date.now()
       };
     }).filter(Boolean);
