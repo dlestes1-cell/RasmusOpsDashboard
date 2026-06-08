@@ -511,7 +511,11 @@ async function runDailyDigest() {
     if (!email) { console.log(`[DIGEST] No email for ${leader} — skipping`); continue; }
 
     const myJobs = leaders.filter(p => p.leader === leader && (!p.removalDate || p.removalDate >= today));
-    const myAtRisk = projects.filter(p => (p.status === 'at-risk' || p.status === 'needs-attention'));
+    const TWO_DAYS_MS = 2 * 864e5;
+    const myAtRisk = projects.filter(p => {
+      const stageLabel = (p.stage || '').toLowerCase();
+      return stageLabel.includes('identification') && p.idEnteredAt && (Date.now() - p.idEnteredAt) > TWO_DAYS_MS && p.leader === leader;
+    });
 
     const jobRows = myJobs.length
       ? myJobs.map(j => `<tr><td style="padding:6px 12px 6px 0;font-family:monospace;font-size:12px;color:#666">${j.projectNumber||''}</td><td style="padding:6px 12px 6px 0;font-size:13px">${j.title}</td><td style="padding:6px 0;font-family:monospace;font-size:11px;color:#999">${j.removalDate||'—'}</td></tr>`).join('')
@@ -521,9 +525,20 @@ async function runDailyDigest() {
       ? thisWeek.map(p => `<tr><td style="padding:4px 12px 4px 0;font-family:monospace;font-size:12px;color:#666">${p.jobNumber||''}</td><td style="padding:4px 12px 4px 0;font-size:12px">${p.name}</td><td style="padding:4px 0;font-family:monospace;font-size:11px;color:#e07020;font-weight:600">${p.date}</td></tr>`).join('')
       : '<tr><td colspan="3" style="padding:4px 0;color:#999;font-size:12px">No auctions this week</td></tr>';
 
+    const atRiskRows = myAtRisk.length
+      ? myAtRisk.map(p => {
+          const daysStuck = Math.floor((Date.now() - p.idEnteredAt) / 864e5);
+          return `<tr><td style="padding:4px 12px 4px 0;font-family:monospace;font-size:12px;color:#666">${p.jobNumber||''}</td><td style="padding:4px 12px 4px 0;font-size:12px">${p.name}</td><td style="padding:4px 0;font-family:monospace;font-size:11px;color:#c84b4b;font-weight:600">${daysStuck}d in ID</td></tr>`;
+        }).join('')
+      : null;
+
     const pendingIdSection = pendingId.length
       ? `<h3 style="font-family:monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#c84b4b;margin:24px 0 8px">New Auctions: Pending ID Date (${pendingId.length})</h3>
          <ul style="margin:0;padding:0 0 0 18px">${pendingId.map(c=>`<li style="font-size:12px;margin-bottom:4px">${c.site}${c.recipient?' &mdash; '+c.recipient:''}</li>`).join('')}</ul>` : '';
+
+    const atRiskSection = atRiskRows
+      ? `<h3 style="font-family:monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#c84b4b;margin:24px 0 8px">At-Risk: Stuck in Identification (${myAtRisk.length})</h3>
+         <table style="width:100%;border-collapse:collapse;margin-bottom:24px">${atRiskRows}</table>` : '';
 
     const html = `<!DOCTYPE html><html><body style="background:#f9f8f5;margin:0;padding:24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a">
 <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid #e5e3db;padding:28px">
@@ -537,6 +552,7 @@ async function runDailyDigest() {
   <h3 style="font-family:monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#888;margin:0 0 8px">Auctions This Week</h3>
   <table style="width:100%;border-collapse:collapse;margin-bottom:24px">${upcomingRows}</table>
 
+  ${atRiskSection}
   ${pendingIdSection}
 
   <p style="margin:24px 0 0;font-size:11px;color:#aaa;font-family:monospace">Rasmus Field Operations Dashboard · Auto-generated at 8:10 AM</p>
