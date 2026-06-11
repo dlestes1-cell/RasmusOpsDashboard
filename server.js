@@ -462,6 +462,26 @@ app.get('/api/sync/stages/:pipelineId', async (req, res) => {
 });
 
 // ── HubSpot raw debug — find the project leader property name ─
+app.get('/api/sync/deal-properties', async (req, res) => {
+  const hsKey = process.env.HUBSPOT_API_KEY;
+  if (!hsKey) return res.status(503).json({ error: 'No HUBSPOT_API_KEY' });
+  try {
+    const propsRes  = await fetch('https://api.hubapi.com/crm/v3/properties/deals', {
+      headers: { Authorization: `Bearer ${hsKey}` }
+    });
+    const propsData = await propsRes.json();
+    const allProps  = propsData.results || [];
+    const keywords  = ['date','schedule','auction','preview','removal','identification','inspection','closing','close','id_date','id date'];
+    const matched   = allProps
+      .filter(p => keywords.some(k => p.label.toLowerCase().includes(k) || p.name.toLowerCase().includes(k)))
+      .map(p => ({ name: p.name, label: p.label, type: p.type, groupName: p.groupName }))
+      .sort((a, b) => a.groupName.localeCompare(b.groupName) || a.label.localeCompare(b.label));
+    res.json({ count: matched.length, properties: matched });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/sync/debug', async (req, res) => {
   const hsKey = process.env.HUBSPOT_API_KEY;
   if (!hsKey) return res.status(503).json({ error: 'No HUBSPOT_API_KEY' });

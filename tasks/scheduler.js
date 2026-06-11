@@ -749,8 +749,9 @@ async function runEmailGmailScan() {
 
   // Search leader-sent AND dashboard-sent (in:sent from destes@rasmus.com)
   const fromQuery  = leaderEntries.map(([, email]) => `from:${email}`).join(' OR ');
-  const sentQuery  = `in:sent (subject:"identification complete" OR subject:"removal complete") after:${ninetyAgo}`;
-  const leaderQuery = `(${fromQuery}) (subject:"identification complete" OR subject:"removal complete") after:${ninetyAgo}`;
+  const subjectFilter = `(subject:"identification complete" OR subject:"post identification" OR subject:"post id" OR subject:"removal complete" OR subject:"post removal")`;
+  const sentQuery   = `in:sent ${subjectFilter} after:${ninetyAgo}`;
+  const leaderQuery = `(${fromQuery}) ${subjectFilter} after:${ninetyAgo}`;
 
   const [leaderMsgs, sentMsgs] = await Promise.all([
     gmail.searchMessages(leaderQuery, 100),
@@ -770,8 +771,8 @@ async function runEmailGmailScan() {
 
     const subjectLower = meta.subject.toLowerCase();
     let type = null;
-    if (subjectLower.includes('identification complete')) type = 'identification';
-    else if (subjectLower.includes('removal complete'))   type = 'removal';
+    if (subjectLower.includes('identification complete') || subjectLower.includes('post identification') || subjectLower.includes('post id')) type = 'identification';
+    else if (subjectLower.includes('removal complete') || subjectLower.includes('post removal')) type = 'removal';
     if (!type) continue;
 
     const leaderMatch = leaderEntries.find(([, email]) => meta.from.toLowerCase().includes(email.toLowerCase()));
