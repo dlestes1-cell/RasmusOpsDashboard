@@ -424,6 +424,28 @@
   .cal-job-pill.removal { background:rgba(196,98,45,0.25); color:#d4823e; border-left:2px solid #C4622D; }
   .cal-job-pill.complete { background:rgba(122,158,110,0.2); color:#7A9E6E; border-left:2px solid #7A9E6E; }
 
+  /* ── Field Stats Pane ───────────────────────────────────── */
+  #fieldStatsPane { display:none; flex-direction:column; flex:1; min-height:0; overflow-y:auto; background:var(--surface); }
+  #fieldStatsPane.visible { display:flex; }
+  .fs-header { padding:18px 24px 14px; border-bottom:1px solid var(--border); display:flex; align-items:flex-start; justify-content:space-between; background:var(--surface); flex-shrink:0; }
+  .fs-title  { font-family:var(--serif); font-size:16px; color:var(--text); margin-bottom:3px; }
+  .fs-subtitle { font-family:var(--mono); font-size:10px; color:var(--text-dim); letter-spacing:0.06em; }
+  .fs-asof   { font-family:var(--mono); font-size:9px; color:var(--text-dim); letter-spacing:0.06em; }
+  .fs-body   { flex:1; overflow-y:auto; padding:20px 24px; display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; align-content:start; }
+  .fs-body::-webkit-scrollbar { width:3px; }
+  .fs-body::-webkit-scrollbar-thumb { background:var(--border); }
+  .fs-loading { grid-column:1/-1; padding:40px 0; text-align:center; font-family:var(--mono); font-size:11px; color:var(--text-dim); letter-spacing:0.06em; }
+  .fs-empty   { grid-column:1/-1; padding:40px 0; text-align:center; font-family:var(--mono); font-size:11px; color:var(--text-dim); letter-spacing:0.06em; }
+  .fs-card   { border:1px solid var(--border); background:var(--surface2); overflow:hidden; }
+  .fs-card-hdr { padding:12px 16px; border-bottom:1px solid var(--border); background:var(--surface); }
+  .fs-card-name { font-family:var(--serif); font-size:13px; color:var(--text); }
+  .fs-tiles  { display:grid; grid-template-columns:repeat(4,1fr); }
+  .fs-tile   { padding:14px 8px 12px; text-align:center; border-right:1px solid var(--border); }
+  .fs-tile:last-child { border-right:none; }
+  .fs-tile-val { font-family:var(--mono); font-size:22px; font-weight:600; color:var(--gold); line-height:1; margin-bottom:5px; }
+  .fs-tile-val.zero { color:var(--text-dim); }
+  .fs-tile-label { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.1em; color:var(--text-dim); }
+
   /* ── Leader Pane ─────────────────────────────────────────── */
   #leaderPane { display:none; flex-direction:column; flex:1; min-height:0; overflow-y:auto; }
   #leaderPane.visible { display:flex; }
@@ -674,6 +696,7 @@
   <button class="tab-btn" id="tabLeaders" onclick="switchTab('leaders')">Project Leaders</button>
   <button class="tab-btn" id="tabCal" onclick="switchTab('calendar')">Calendar</button>
   <button class="tab-btn" id="tabEmail" onclick="switchTab('email')">Email Tracking</button>
+  <button class="tab-btn" id="tabFieldStats" onclick="switchTab('fieldstats')">Field Stats</button>
 </div>
 
 <div id="tabContent">
@@ -869,6 +892,23 @@
     <div style="overflow-x:auto"><table class="et-table"><thead><tr>
       <th>Job #</th><th>Name</th><th>Leader</th><th>Removal Date</th><th>Status</th><th>Actions</th>
     </tr></thead><tbody id="etRemovalBody"></tbody></table></div>
+  </div>
+</div>
+
+<!-- Field Stats Pane -->
+<div id="fieldStatsPane">
+  <div class="fs-header">
+    <div>
+      <div class="fs-title">Completed Jobs by Leader</div>
+      <div class="fs-subtitle">Deals with a past close date in the auction pipeline</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="fs-asof" id="fsAsOf"></span>
+      <button class="sync-btn" id="fsRefreshBtn" onclick="loadFieldStats()">⟳ Refresh</button>
+    </div>
+  </div>
+  <div class="fs-body" id="fieldStatsList">
+    <div class="fs-loading">Loading…</div>
   </div>
 </div>
 
@@ -1323,20 +1363,80 @@ async function sendConfirmation(id, btnOverride) {
 
 // ── Tab switching ─────────────────────────────────────────────
 function switchTab(tab) {
-  const opsContent = document.getElementById('opsContent');
-  const leaders    = document.getElementById('leaderPane');
-  const cal        = document.getElementById('calendarPane');
-  const email      = document.getElementById('emailTrackingPane');
-  document.getElementById('tabOps').classList.toggle('active',     tab === 'ops');
-  document.getElementById('tabLeaders').classList.toggle('active', tab === 'leaders');
-  document.getElementById('tabCal').classList.toggle('active',     tab === 'calendar');
-  document.getElementById('tabEmail').classList.toggle('active',   tab === 'email');
-  opsContent.style.display = tab === 'ops'      ? 'flex' : 'none';
-  leaders.classList.toggle('visible',  tab === 'leaders');
-  cal.classList.toggle('visible',      tab === 'calendar');
-  email.classList.toggle('visible',    tab === 'email');
-  if (tab === 'calendar') renderCalendar();
-  if (tab === 'email')    renderEmailTracking();
+  const opsContent  = document.getElementById('opsContent');
+  const leaders     = document.getElementById('leaderPane');
+  const cal         = document.getElementById('calendarPane');
+  const email       = document.getElementById('emailTrackingPane');
+  const fieldStats  = document.getElementById('fieldStatsPane');
+  document.getElementById('tabOps').classList.toggle('active',        tab === 'ops');
+  document.getElementById('tabLeaders').classList.toggle('active',    tab === 'leaders');
+  document.getElementById('tabCal').classList.toggle('active',        tab === 'calendar');
+  document.getElementById('tabEmail').classList.toggle('active',      tab === 'email');
+  document.getElementById('tabFieldStats').classList.toggle('active', tab === 'fieldstats');
+  opsContent.style.display = tab === 'ops' ? 'flex' : 'none';
+  leaders.classList.toggle('visible',    tab === 'leaders');
+  cal.classList.toggle('visible',        tab === 'calendar');
+  email.classList.toggle('visible',      tab === 'email');
+  fieldStats.classList.toggle('visible', tab === 'fieldstats');
+  if (tab === 'calendar')   renderCalendar();
+  if (tab === 'email')      renderEmailTracking();
+  if (tab === 'fieldstats') loadFieldStats();
+}
+
+// ── Field Stats ───────────────────────────────────────────────
+let fieldStatsCache = null;
+
+async function loadFieldStats() {
+  const btn  = document.getElementById('fsRefreshBtn');
+  const list = document.getElementById('fieldStatsList');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin">&#x21BB;</span> Loading…'; }
+  try {
+    const res  = await fetch('/api/leader-stats');
+    const data = await res.json();
+    fieldStatsCache = data;
+    renderFieldStats(data);
+  } catch (e) {
+    if (list) list.innerHTML = `<div class="fs-empty">Failed to load: ${esc(e.message)}</div>`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '⟳ Refresh'; }
+  }
+}
+
+function renderFieldStats(data) {
+  const list  = document.getElementById('fieldStatsList');
+  const asOf  = document.getElementById('fsAsOf');
+  if (!list) return;
+
+  if (asOf && data.asOf) {
+    const d = new Date(data.asOf);
+    asOf.textContent = 'as of ' + d.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+  }
+
+  const leaders = data.leaders || [];
+  if (!leaders.length) {
+    list.innerHTML = '<div class="fs-empty">No completed jobs found in the last 12 months.</div>';
+    return;
+  }
+
+  list.innerHTML = leaders.map(l => {
+    const tiles = [
+      { val: l.m3,  label: '3 mo'  },
+      { val: l.m6,  label: '6 mo'  },
+      { val: l.m9,  label: '9 mo'  },
+      { val: l.m12, label: '12 mo' }
+    ].map(t => `
+      <div class="fs-tile">
+        <div class="fs-tile-val${t.val === 0 ? ' zero' : ''}">${t.val}</div>
+        <div class="fs-tile-label">${t.label}</div>
+      </div>`).join('');
+    return `
+      <div class="fs-card">
+        <div class="fs-card-hdr">
+          <div class="fs-card-name">${esc(l.name)}</div>
+        </div>
+        <div class="fs-tiles">${tiles}</div>
+      </div>`;
+  }).join('');
 }
 
 // ── Calendar ──────────────────────────────────────────────────

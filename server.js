@@ -745,6 +745,108 @@ app.get('/api/hubspot-active-projects', async (req, res) => {
   }
 });
 
+// ── Leader Field Stats ────────────────────────────────────────
+app.get('/api/leader-stats', async (req, res) => {
+  const hsKey = process.env.HUBSPOT_API_KEY;
+  if (!hsKey) return res.status(503).json({ error: 'No HUBSPOT_API_KEY' });
+
+  const PIPELINE = '147097136';
+  const OWNERS = {
+    '84584819':   'Karen Kester',
+    '89024581':   'Blake Johnson',
+    '1613587974': 'Kenneth Weaver',
+    '76302559':   'Darren Estes',
+    '84107196':   'Luciana Castillo',
+    '84584840':   'Werner Manrique-Martinez',
+    '76302361':   'Madi Felix',
+    '76267712':   'Lauren Balderson',
+    '78392611':   'Clarke Gray',
+    '89024559':   'Kelly Jackson',
+    '89745865':   'Rachel Wulfekuhle',
+    '90980995':   'Mashao Seabela',
+    '321507837':  'Cecelia Bussey',
+    '638585431':  'Crystal Felix',
+    '650958939':  'Michelle Jarvis',
+    '662451144':  'Scott Wright',
+    '1275610303': 'Abby Fitzgerald',
+    '1338132313': 'Kathleen Rodimak',
+    '1355258725': 'Chris Kubica',
+    '1391725369': 'Chris Rasmus',
+    '1886951536': 'Patrick Rasmus',
+    '2006075167': 'Theo Babacar',
+    '2061785375': 'Candy Sicilia',
+    '24375587':   'Erik Rasmus',
+    '72301438':   'Adam Roberts',
+    '77636448':   'Susan Rasmus',
+    '77935192':   'Demomé Hydol'
+  };
+
+  try {
+    const now = Date.now();
+    const twelveMonthsAgo = now - 365 * 24 * 60 * 60 * 1000;
+
+    let allDeals = [];
+    let after = undefined;
+
+    do {
+      const body = {
+        filterGroups: [{
+          filters: [
+            { propertyName: 'pipeline',       operator: 'EQ',           value: PIPELINE },
+            { propertyName: 'project_leader', operator: 'HAS_PROPERTY' },
+            { propertyName: 'closedate',      operator: 'GTE',          value: String(twelveMonthsAgo) },
+            { propertyName: 'closedate',      operator: 'LT',           value: String(now) }
+          ]
+        }],
+        properties: ['dealname', 'project_leader', 'closedate'],
+        limit: 100,
+        sorts: [{ propertyName: 'closedate', direction: 'DESCENDING' }]
+      };
+      if (after) body.after = after;
+
+      const r = await fetch('https://api.hubapi.com/crm/v3/objects/deals/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hsKey}` },
+        body: JSON.stringify(body)
+      });
+      const data = await r.json();
+      allDeals = allDeals.concat(data.results || []);
+      after = data.paging?.next?.after;
+    } while (after);
+
+    const cutoffs = {
+      m3:  now - 3  * 30 * 24 * 60 * 60 * 1000,
+      m6:  now - 6  * 30 * 24 * 60 * 60 * 1000,
+      m9:  now - 9  * 30 * 24 * 60 * 60 * 1000,
+      m12: now - 12 * 30 * 24 * 60 * 60 * 1000
+    };
+
+    const leaderMap = {};
+    allDeals.forEach(deal => {
+      const p = deal.properties;
+      if (!p.closedate) return;
+      const leaderId   = p.project_leader;
+      const leaderName = OWNERS[leaderId] || `Owner ${leaderId}`;
+      const closedMs   = new Date(p.closedate).getTime();
+
+      if (!leaderMap[leaderName]) leaderMap[leaderName] = { name: leaderName, m3: 0, m6: 0, m9: 0, m12: 0 };
+      if (closedMs >= cutoffs.m3)  leaderMap[leaderName].m3++;
+      if (closedMs >= cutoffs.m6)  leaderMap[leaderName].m6++;
+      if (closedMs >= cutoffs.m9)  leaderMap[leaderName].m9++;
+      if (closedMs >= cutoffs.m12) leaderMap[leaderName].m12++;
+    });
+
+    const leaders = Object.values(leaderMap)
+      .filter(l => l.m12 > 0)
+      .sort((a, b) => b.m12 - a.m12);
+
+    res.json({ asOf: new Date().toISOString(), total: allDeals.length, leaders });
+  } catch (e) {
+    console.error('[LEADER-STATS] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Start ─────────────────────────────────────────────────────
 scheduler.init(broadcast);
 
