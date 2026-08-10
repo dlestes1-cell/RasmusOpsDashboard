@@ -798,7 +798,7 @@ app.get('/api/leader-stats', async (req, res) => {
             { propertyName: 'closedate',      operator: 'LT',           value: String(now) }
           ]
         }],
-        properties: ['dealname', 'project_leader', 'closedate'],
+        properties: ['dealname', 'project_leader', 'closedate', 'amount'],
         limit: 100,
         sorts: [{ propertyName: 'closedate', direction: 'DESCENDING' }]
       };
@@ -829,11 +829,31 @@ app.get('/api/leader-stats', async (req, res) => {
       const leaderName = OWNERS[leaderId] || `Owner ${leaderId}`;
       const closedMs   = new Date(p.closedate).getTime();
 
-      if (!leaderMap[leaderName]) leaderMap[leaderName] = { name: leaderName, m3: 0, m6: 0, m9: 0, m12: 0 };
+      if (!leaderMap[leaderName]) leaderMap[leaderName] = { name: leaderName, m3: 0, m6: 0, m9: 0, m12: 0, deals: [] };
       if (closedMs >= cutoffs.m3)  leaderMap[leaderName].m3++;
       if (closedMs >= cutoffs.m6)  leaderMap[leaderName].m6++;
       if (closedMs >= cutoffs.m9)  leaderMap[leaderName].m9++;
       if (closedMs >= cutoffs.m12) leaderMap[leaderName].m12++;
+
+      const jobMatch  = (p.dealname || '').match(/^(R\d+)\s+(.*)/i);
+      const jobNumber = jobMatch ? jobMatch[1] : '';
+      const jobName   = jobMatch ? jobMatch[2].trim() : (p.dealname || 'Untitled');
+      const amount    = p.amount && parseFloat(p.amount) > 0 ? parseFloat(p.amount) : null;
+      const closeDate = p.closedate ? p.closedate.split('T')[0] : null;
+
+      leaderMap[leaderName].deals.push({
+        hubspotId:  deal.id,
+        jobNumber,
+        name:       jobName,
+        closeDate,
+        amount,
+        hubspotUrl: `https://app.hubspot.com/contacts/46444696/record/0-3/${deal.id}`
+      });
+    });
+
+    // Sort each leader's deals newest first
+    Object.values(leaderMap).forEach(l => {
+      l.deals.sort((a, b) => (b.closeDate || '').localeCompare(a.closeDate || ''));
     });
 
     const leaders = Object.values(leaderMap)

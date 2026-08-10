@@ -445,6 +445,23 @@
   .fs-tile-val { font-family:var(--mono); font-size:22px; font-weight:600; color:var(--gold); line-height:1; margin-bottom:5px; }
   .fs-tile-val.zero { color:var(--text-dim); }
   .fs-tile-label { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.1em; color:var(--text-dim); }
+  .fs-card-toggle { width:100%; background:none; border:none; border-top:1px solid var(--border); color:var(--text-dim); font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.1em; padding:7px 16px; cursor:pointer; display:flex; align-items:center; gap:6px; transition:background 0.15s,color 0.15s; }
+  .fs-card-toggle:hover { background:var(--surface3); color:var(--text-mid); }
+  .fs-card-toggle .toggle-arrow { transition:transform 0.2s; display:inline-block; }
+  .fs-card-toggle.open .toggle-arrow { transform:rotate(90deg); }
+  .fs-deals { display:none; border-top:1px solid var(--border); }
+  .fs-deals.open { display:block; }
+  .fs-deal-table { width:100%; border-collapse:collapse; }
+  .fs-deal-table th { padding:6px 14px; font-family:var(--mono); font-size:8px; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-dim); text-align:left; border-bottom:1px solid var(--border); background:var(--bg); white-space:nowrap; }
+  .fs-deal-table td { padding:8px 14px; font-size:11px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  .fs-deal-table tr:last-child td { border-bottom:none; }
+  .fs-deal-table tr:hover td { background:var(--surface3); }
+  .fs-deal-job  { font-family:var(--mono); font-size:10px; color:var(--text-dim); white-space:nowrap; }
+  .fs-deal-name { color:var(--text); }
+  .fs-deal-date { font-family:var(--mono); font-size:10px; color:var(--text-mid); white-space:nowrap; }
+  .fs-deal-amt  { font-family:var(--mono); font-size:11px; color:var(--green); font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:600; }
+  .fs-deal-link { color:var(--text-dim); text-decoration:none; font-family:var(--mono); font-size:9px; opacity:0.6; }
+  .fs-deal-link:hover { opacity:1; color:var(--gold); }
 
   /* ── Leader Pane ─────────────────────────────────────────── */
   #leaderPane { display:none; flex-direction:column; flex:1; min-height:0; overflow-y:auto; }
@@ -1403,8 +1420,8 @@ async function loadFieldStats() {
 }
 
 function renderFieldStats(data) {
-  const list  = document.getElementById('fieldStatsList');
-  const asOf  = document.getElementById('fsAsOf');
+  const list = document.getElementById('fieldStatsList');
+  const asOf = document.getElementById('fsAsOf');
   if (!list) return;
 
   if (asOf && data.asOf) {
@@ -1418,7 +1435,7 @@ function renderFieldStats(data) {
     return;
   }
 
-  list.innerHTML = leaders.map(l => {
+  list.innerHTML = leaders.map((l, i) => {
     const tiles = [
       { val: l.m3,  label: '3 mo'  },
       { val: l.m6,  label: '6 mo'  },
@@ -1429,14 +1446,50 @@ function renderFieldStats(data) {
         <div class="fs-tile-val${t.val === 0 ? ' zero' : ''}">${t.val}</div>
         <div class="fs-tile-label">${t.label}</div>
       </div>`).join('');
+
+    const hasAmount = (l.deals || []).some(d => d.amount);
+    const dealRows = (l.deals || []).map(d => {
+      const dateStr = d.closeDate
+        ? new Date(d.closeDate + 'T12:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })
+        : '—';
+      const amtCell = d.amount != null
+        ? `<td class="fs-deal-amt">$${d.amount.toLocaleString('en-US', { minimumFractionDigits:0, maximumFractionDigits:0 })}</td>`
+        : (hasAmount ? '<td class="fs-deal-date">—</td>' : '');
+      return `<tr>
+        <td class="fs-deal-job">${esc(d.jobNumber || '—')}</td>
+        <td class="fs-deal-name">${esc(d.name)}</td>
+        <td class="fs-deal-date">${dateStr}</td>
+        ${amtCell}
+        <td><a class="fs-deal-link" href="${d.hubspotUrl}" target="_blank" rel="noopener">↗ HS</a></td>
+      </tr>`;
+    }).join('');
+
+    const amtHeader = hasAmount ? '<th>Sale Total</th>' : '';
+
     return `
       <div class="fs-card">
         <div class="fs-card-hdr">
           <div class="fs-card-name">${esc(l.name)}</div>
         </div>
         <div class="fs-tiles">${tiles}</div>
+        <button class="fs-card-toggle" onclick="toggleFsDeals(this, 'fs-deals-${i}')">
+          <span class="toggle-arrow">▶</span> ${l.deals.length} job${l.deals.length !== 1 ? 's' : ''}
+        </button>
+        <div class="fs-deals" id="fs-deals-${i}">
+          <table class="fs-deal-table">
+            <thead><tr><th>Job #</th><th>Name</th><th>Closed</th>${amtHeader}<th></th></tr></thead>
+            <tbody>${dealRows}</tbody>
+          </table>
+        </div>
       </div>`;
   }).join('');
+}
+
+function toggleFsDeals(btn, id) {
+  const panel = document.getElementById(id);
+  if (!panel) return;
+  const open = panel.classList.toggle('open');
+  btn.classList.toggle('open', open);
 }
 
 // ── Calendar ──────────────────────────────────────────────────
