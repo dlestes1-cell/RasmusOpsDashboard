@@ -778,17 +778,26 @@ app.get('/api/leader-stats/debug', async (req, res) => {
       body: JSON.stringify(body)
     });
     const data = await r.json();
+    const BID_KEYWORDS = ['bid', 'auction', 'reconcil', 'sale', 'revenue', 'gross', 'proceed', 'total', 'final', 'amount', 'price'];
+    const allPropMeta = Object.fromEntries((propsData.results || []).map(p => [p.name, p.label]));
+
     const deals = (data.results || []).map(d => ({
       id:   d.id,
       name: d.properties.dealname,
-      closedate: d.properties.closedate,
-      // Only return properties that actually have a value
+      closedate:  d.properties.closedate,
+      dealstage:  d.properties.dealstage,
       filledProps: Object.entries(d.properties)
         .filter(([, v]) => v !== null && v !== '' && v !== '0')
         .sort(([a], [b]) => a.localeCompare(b))
-        .reduce((acc, [k, v]) => { acc[k] = v; return acc; }, {})
+        .reduce((acc, [k, v]) => { acc[k] = { value: v, label: allPropMeta[k] || k }; return acc; }, {}),
+      bidAndSaleProps: Object.entries(d.properties)
+        .filter(([k, v]) => v !== null && v !== '' && BID_KEYWORDS.some(kw => k.toLowerCase().includes(kw) || (allPropMeta[k] || '').toLowerCase().includes(kw)))
+        .reduce((acc, [k, v]) => { acc[k] = { value: v, label: allPropMeta[k] || k }; return acc; }, {})
     }));
-    res.json({ note: 'Shows filled properties on the 3 most-recently-closed deals in the auction pipeline', deals });
+    res.json({
+      note: 'Shows filled properties on the 3 most-recently-closed deals. Check bidAndSaleProps for bid/reconciliation field names.',
+      deals
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -837,17 +846,32 @@ app.get('/api/leader-stats', async (req, res) => {
     let allDeals = [];
     let after = undefined;
 
+    // Two filter groups (OR): deals with closedate in range, OR deals assigned to a known
+    // leader via project_leader/hubspot_owner_id regardless of closedate, so we don't
+    // miss completed deals that have a null or future closedate in HubSpot.
     do {
       const body = {
-        filterGroups: [{
-          filters: [
-            { propertyName: 'pipeline',       operator: 'EQ',           value: PIPELINE },
-            { propertyName: 'project_leader', operator: 'HAS_PROPERTY' },
-            { propertyName: 'closedate',      operator: 'GTE',          value: String(twelveMonthsAgo) },
-            { propertyName: 'closedate',      operator: 'LT',           value: String(now) }
-          ]
-        }],
-        properties: ['dealname', 'project_leader', 'closedate', 'amount', 'marketing_projected_sales'],
+        filterGroups: [
+          // Group A: closedate-based (catches deals explicitly closed in the window)
+          {
+            filters: [
+              { propertyName: 'pipeline',  operator: 'EQ',  value: PIPELINE },
+              { propertyName: 'closedate', operator: 'GTE', value: String(twelveMonthsAgo) },
+              { propertyName: 'closedate', operator: 'LT',  value: String(now) }
+            ]
+          },
+          // Group B: stage-excluded (catches closed/won deals regardless of closedate)
+          {
+            filters: [
+              { propertyName: 'pipeline',   operator: 'EQ',     value: PIPELINE },
+              { propertyName: 'dealstage',  operator: 'NOT_IN', values: [
+                '249570210','978470732','249570211','1026748166','249570214'  // active stages
+              ]},
+              { propertyName: 'createdate', operator: 'GTE', value: String(twelveMonthsAgo) }
+            ]
+          }
+        ],
+        properties: ['dealname', 'project_leader', 'hubspot_owner_id', 'closedate', 'createdate', 'dealstage', 'amount', 'marketing_projected_sales'],
         limit: 100,
         sorts: [{ propertyName: 'closedate', direction: 'DESCENDING' }]
       };
@@ -863,6 +887,10 @@ app.get('/api/leader-stats', async (req, res) => {
       after = data.paging?.next?.after;
     } while (after);
 
+    // Deduplicate by deal ID (OR filter groups can return the same deal twice)
+    const seen = new Set();
+    allDeals = allDeals.filter(d => { if (seen.has(d.id)) return false; seen.add(d.id); return true; });
+
     const cutoffs = {
       m3:  now - 3  * 30 * 24 * 60 * 60 * 1000,
       m6:  now - 6  * 30 * 24 * 60 * 60 * 1000,
@@ -874,10 +902,15 @@ app.get('/api/leader-stats', async (req, res) => {
     const leaderMap = {};
     allDeals.forEach(deal => {
       const p = deal.properties;
-      if (!p.closedate) return;
-      const leaderId   = p.project_leader;
-      const leaderName = OWNERS[leaderId] || `Owner ${leaderId}`;
-      const closedMs   = new Date(p.closedate).getTime();
+      // Resolve leader: prefer project_leader custom field, fall back to hubspot_owner_id
+      const leaderId   = p.project_leader || p.hubspot_owner_id;
+      if (!leaderId || !OWNERS[leaderId]) return;  // skip deals not owned by a known leader
+      const leaderName = OWNERS[leaderId];
+
+      // Use closedate if set; fall back to createdate so the deal still counts
+      const dateStr  = p.closedate || p.createdate;
+      const closedMs = dateStr ? new Date(dateStr).getTime() : null;
+      if (!closedMs) return;
 
       if (!leaderMap[leaderName]) leaderMap[leaderName] = { name: leaderName, m3: 0, m6: 0, m9: 0, m12: 0, ytdTotal: 0, deals: [] };
       if (closedMs >= cutoffs.m3)  leaderMap[leaderName].m3++;
@@ -890,7 +923,7 @@ app.get('/api/leader-stats', async (req, res) => {
       const jobName   = jobMatch ? jobMatch[2].trim() : (p.dealname || 'Untitled');
       const rawAmt    = p.amount || p.marketing_projected_sales || null;
       const amount    = rawAmt && parseFloat(rawAmt) > 0 ? parseFloat(rawAmt) : null;
-      const closeDate = p.closedate ? p.closedate.split('T')[0] : null;
+      const closeDate = (p.closedate || p.createdate || '').split('T')[0] || null;
 
       if (amount && closedMs >= ytdStart) leaderMap[leaderName].ytdTotal += amount;
 
