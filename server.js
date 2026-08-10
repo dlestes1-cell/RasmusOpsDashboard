@@ -745,6 +745,55 @@ app.get('/api/hubspot-active-projects', async (req, res) => {
   }
 });
 
+// ── Leader Stats Debug — inspect completed deal properties ────
+app.get('/api/leader-stats/debug', async (req, res) => {
+  const hsKey = process.env.HUBSPOT_API_KEY;
+  if (!hsKey) return res.status(503).json({ error: 'No HUBSPOT_API_KEY' });
+  const PIPELINE = '147097136';
+  try {
+    // Fetch ALL deal properties so we can request them all at once
+    const propsRes  = await fetch('https://api.hubapi.com/crm/v3/properties/deals', {
+      headers: { Authorization: `Bearer ${hsKey}` }
+    });
+    const propsData = await propsRes.json();
+    const allPropNames = (propsData.results || []).map(p => p.name);
+
+    const now = Date.now();
+    const twelveMonthsAgo = now - 365 * 24 * 60 * 60 * 1000;
+    const body = {
+      filterGroups: [{
+        filters: [
+          { propertyName: 'pipeline',  operator: 'EQ',  value: PIPELINE },
+          { propertyName: 'closedate', operator: 'GTE', value: String(twelveMonthsAgo) },
+          { propertyName: 'closedate', operator: 'LT',  value: String(now) }
+        ]
+      }],
+      properties: allPropNames,
+      limit: 3,
+      sorts: [{ propertyName: 'closedate', direction: 'DESCENDING' }]
+    };
+    const r    = await fetch('https://api.hubapi.com/crm/v3/objects/deals/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hsKey}` },
+      body: JSON.stringify(body)
+    });
+    const data = await r.json();
+    const deals = (data.results || []).map(d => ({
+      id:   d.id,
+      name: d.properties.dealname,
+      closedate: d.properties.closedate,
+      // Only return properties that actually have a value
+      filledProps: Object.entries(d.properties)
+        .filter(([, v]) => v !== null && v !== '' && v !== '0')
+        .sort(([a], [b]) => a.localeCompare(b))
+        .reduce((acc, [k, v]) => { acc[k] = v; return acc; }, {})
+    }));
+    res.json({ note: 'Shows filled properties on the 3 most-recently-closed deals in the auction pipeline', deals });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Leader Field Stats ────────────────────────────────────────
 app.get('/api/leader-stats', async (req, res) => {
   const hsKey = process.env.HUBSPOT_API_KEY;
@@ -798,7 +847,7 @@ app.get('/api/leader-stats', async (req, res) => {
             { propertyName: 'closedate',      operator: 'LT',           value: String(now) }
           ]
         }],
-        properties: ['dealname', 'project_leader', 'closedate', 'amount'],
+        properties: ['dealname', 'project_leader', 'closedate', 'amount', 'marketing_projected_sales'],
         limit: 100,
         sorts: [{ propertyName: 'closedate', direction: 'DESCENDING' }]
       };
@@ -839,7 +888,8 @@ app.get('/api/leader-stats', async (req, res) => {
       const jobMatch  = (p.dealname || '').match(/^(R\d+)\s+(.*)/i);
       const jobNumber = jobMatch ? jobMatch[1] : '';
       const jobName   = jobMatch ? jobMatch[2].trim() : (p.dealname || 'Untitled');
-      const amount    = p.amount && parseFloat(p.amount) > 0 ? parseFloat(p.amount) : null;
+      const rawAmt    = p.amount || p.marketing_projected_sales || null;
+      const amount    = rawAmt && parseFloat(rawAmt) > 0 ? parseFloat(rawAmt) : null;
       const closeDate = p.closedate ? p.closedate.split('T')[0] : null;
 
       if (amount && closedMs >= ytdStart) leaderMap[leaderName].ytdTotal += amount;
