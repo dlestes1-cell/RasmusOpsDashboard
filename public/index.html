@@ -494,6 +494,9 @@
   .fs-card-hdr-btn { cursor:pointer; transition:background 0.15s; }
   .fs-card-hdr-btn:hover { background:var(--surface3); }
   .fs-card-hdr-expand { font-family:var(--mono); font-size:9px; color:var(--text-dim); letter-spacing:0.06em; opacity:0.7; white-space:nowrap; }
+  .fs-card-hdr-right { display:flex; flex-direction:column; align-items:flex-end; gap:3px; flex-shrink:0; }
+  .fs-ytd-badge { font-family:var(--mono); font-size:12px; font-weight:600; color:var(--green); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .lp-modal-ytd { font-family:var(--mono); font-size:16px; font-weight:600; color:var(--green); font-variant-numeric:tabular-nums; margin-top:4px; }
 
   /* ── Leader Pane ─────────────────────────────────────────── */
   #leaderPane { display:none; flex-direction:column; flex:1; min-height:0; overflow-y:auto; }
@@ -1522,7 +1525,10 @@ function renderFieldStats(data) {
       <div class="fs-card">
         <div class="fs-card-hdr fs-card-hdr-btn" onclick="openLeaderProfile(${i})" title="Expand full view">
           <div class="fs-card-name">${esc(l.name)}</div>
-          <div class="fs-card-hdr-expand">⤢ full view</div>
+          <div class="fs-card-hdr-right">
+            ${l.ytdTotal > 0 ? `<div class="fs-ytd-badge">$${l.ytdTotal.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})} YTD</div>` : ''}
+            <div class="fs-card-hdr-expand">⤢ full view</div>
+          </div>
         </div>
         <div class="fs-tiles">${tiles}</div>
         <button class="fs-card-toggle" onclick="toggleFsDeals(this, 'fs-deals-${i}')">
@@ -1552,8 +1558,11 @@ function openLeaderProfile(idx) {
   if (!l) return;
 
   document.getElementById('lpmName').textContent = l.name;
+  const ytdStr = l.ytdTotal > 0
+    ? `$${l.ytdTotal.toLocaleString('en-US', { minimumFractionDigits:0, maximumFractionDigits:0 })} in sales YTD  ·  `
+    : '';
   document.getElementById('lpmMeta').textContent =
-    `${l.deals.length} completed job${l.deals.length !== 1 ? 's' : ''} · last 12 months`;
+    `${ytdStr}${l.deals.length} completed job${l.deals.length !== 1 ? 's' : ''} · last 12 months`;
 
   document.getElementById('lpmTiles').innerHTML = [
     { val: l.m3,  label: '3 mo'  },

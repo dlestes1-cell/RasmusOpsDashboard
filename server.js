@@ -820,6 +820,7 @@ app.get('/api/leader-stats', async (req, res) => {
       m9:  now - 9  * 30 * 24 * 60 * 60 * 1000,
       m12: now - 12 * 30 * 24 * 60 * 60 * 1000
     };
+    const ytdStart = new Date(new Date().getFullYear(), 0, 1).getTime();
 
     const leaderMap = {};
     allDeals.forEach(deal => {
@@ -829,7 +830,7 @@ app.get('/api/leader-stats', async (req, res) => {
       const leaderName = OWNERS[leaderId] || `Owner ${leaderId}`;
       const closedMs   = new Date(p.closedate).getTime();
 
-      if (!leaderMap[leaderName]) leaderMap[leaderName] = { name: leaderName, m3: 0, m6: 0, m9: 0, m12: 0, deals: [] };
+      if (!leaderMap[leaderName]) leaderMap[leaderName] = { name: leaderName, m3: 0, m6: 0, m9: 0, m12: 0, ytdTotal: 0, deals: [] };
       if (closedMs >= cutoffs.m3)  leaderMap[leaderName].m3++;
       if (closedMs >= cutoffs.m6)  leaderMap[leaderName].m6++;
       if (closedMs >= cutoffs.m9)  leaderMap[leaderName].m9++;
@@ -840,6 +841,8 @@ app.get('/api/leader-stats', async (req, res) => {
       const jobName   = jobMatch ? jobMatch[2].trim() : (p.dealname || 'Untitled');
       const amount    = p.amount && parseFloat(p.amount) > 0 ? parseFloat(p.amount) : null;
       const closeDate = p.closedate ? p.closedate.split('T')[0] : null;
+
+      if (amount && closedMs >= ytdStart) leaderMap[leaderName].ytdTotal += amount;
 
       leaderMap[leaderName].deals.push({
         hubspotId:  deal.id,
