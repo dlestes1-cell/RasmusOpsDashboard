@@ -449,9 +449,9 @@
   .fs-card-toggle:hover { background:var(--surface3); color:var(--text-mid); }
   .fs-card-toggle .toggle-arrow { transition:transform 0.2s; display:inline-block; }
   .fs-card-toggle.open .toggle-arrow { transform:rotate(90deg); }
-  .fs-deals { display:none; border-top:1px solid var(--border); }
+  .fs-deals { display:none; border-top:1px solid var(--border); max-height:260px; overflow-y:auto; overflow-x:auto; }
   .fs-deals.open { display:block; }
-  .fs-deal-table { width:100%; border-collapse:collapse; }
+  .fs-deal-table { width:100%; border-collapse:collapse; min-width:420px; }
   .fs-deal-table th { padding:6px 14px; font-family:var(--mono); font-size:8px; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-dim); text-align:left; border-bottom:1px solid var(--border); background:var(--bg); white-space:nowrap; }
   .fs-deal-table td { padding:8px 14px; font-size:11px; border-bottom:1px solid var(--border); vertical-align:middle; }
   .fs-deal-table tr:last-child td { border-bottom:none; }
