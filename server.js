@@ -907,6 +907,7 @@ app.get('/api/leader-stats', async (req, res) => {
       const leaderId = p.project_leader;
       if (!leaderId || !OWNERS[leaderId]) return;
       const leaderName = OWNERS[leaderId];
+      if (['Chris Rasmus', 'Erik Rasmus', 'Crystal Felix'].includes(leaderName)) return;
 
       // Use closedate if set; fall back to createdate so the deal still counts
       const dateStr  = p.closedate || p.createdate;
