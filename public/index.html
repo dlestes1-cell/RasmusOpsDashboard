@@ -49,8 +49,10 @@
   .alert-dismiss:hover { color:var(--red); }
 
   /* Stats */
-  .stat-bar { display:flex; background:var(--surface); border-bottom:1px solid var(--border); }
-  .stat { flex:1; padding:14px 24px; border-right:1px solid var(--border); }
+  .stat-section { background:var(--surface); border-bottom:1px solid var(--border); }
+  .stat-section-header { padding:6px 24px 0; font-family:var(--mono); font-size:9px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.12em; }
+  .stat-bar { display:flex; background:var(--surface); }
+  .stat { flex:1; padding:12px 24px 14px; border-right:1px solid var(--border); }
   .stat:last-child { border-right:none; }
   .stat-label { font-family:var(--mono); font-size:9px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.15em; }
   .stat-value { font-family:var(--mono); font-size:24px; font-weight:500; color:var(--gold); line-height:1.1; margin-top:2px; }
@@ -753,13 +755,16 @@
 </div>
 
 <!-- Stats -->
-<div class="stat-bar">
-  <div class="stat"><div class="stat-label">Active Projects</div><div class="stat-value" id="sActive">—</div></div>
-  <div class="stat"><div class="stat-label">Identification</div><div class="stat-value" style="color:var(--blue)" id="sOnTrack">—</div></div>
-  <div class="stat"><div class="stat-label">Selling Online</div><div class="stat-value amber" id="sAtRisk">—</div></div>
-  <div class="stat"><div class="stat-label">Emails Pending</div><div class="stat-value red" id="sPending">—</div></div>
-  <div class="stat"><div class="stat-label">Confirmed</div><div class="stat-value" id="sDone">—</div></div>
-  <div class="stat"><div class="stat-label">Overdue</div><div class="stat-value red" id="sOverdue">—</div></div>
+<div class="stat-section">
+  <div class="stat-section-header">2026 Field Statistics &nbsp;·&nbsp; Jan 1 – Dec 31, 2026</div>
+  <div class="stat-bar">
+    <div class="stat"><div class="stat-label">Active Projects</div><div class="stat-value" id="sActive">—</div></div>
+    <div class="stat"><div class="stat-label">Identification</div><div class="stat-value" style="color:var(--blue)" id="sOnTrack">—</div></div>
+    <div class="stat"><div class="stat-label">Selling Online</div><div class="stat-value amber" id="sAtRisk">—</div></div>
+    <div class="stat"><div class="stat-label">Emails Pending</div><div class="stat-value red" id="sPending">—</div></div>
+    <div class="stat"><div class="stat-label">Confirmed</div><div class="stat-value" id="sDone">—</div></div>
+    <div class="stat"><div class="stat-label">Overdue</div><div class="stat-value red" id="sOverdue">—</div></div>
+  </div>
 </div>
 
 <!-- Tab bar -->
@@ -1083,12 +1088,28 @@ function renderStats() {
   const p = state.projects || [];
   const c = state.confirmations || [];
   const now = Date.now();
-  set('sActive',  p.filter(x => x.status !== 'complete').length);
-  set('sOnTrack', p.filter(x => x.status === 'identification').length);
-  set('sAtRisk',  p.filter(x => x.status === 'selling-online').length);
-  set('sPending', c.filter(x => !x.sent && x.idDateSet && (now - x.completedAt) < 864e5).length);
-  set('sDone',    c.filter(x => x.sent).length);
-  set('sOverdue', c.filter(x => !x.sent && x.idDateSet && (now - x.completedAt) >= 864e5).length);
+  const yearStart = new Date('2026-01-01T00:00:00').getTime();
+  const yearEnd   = new Date('2026-12-31T23:59:59').getTime();
+
+  const inYear = x => {
+    const ts = x.date
+      ? new Date(x.date + 'T00:00:00').getTime()
+      : (x.createdAt || 0);
+    return ts >= yearStart && ts <= yearEnd;
+  };
+
+  const p26 = p.filter(inYear);
+  const c26 = c.filter(x => {
+    const ts = x.completedAt || x.createdAt || 0;
+    return ts >= yearStart && ts <= yearEnd;
+  });
+
+  set('sActive',  p26.filter(x => x.status !== 'complete').length);
+  set('sOnTrack', p26.filter(x => x.status === 'identification').length);
+  set('sAtRisk',  p26.filter(x => x.status === 'selling-online').length);
+  set('sPending', c26.filter(x => !x.sent && x.idDateSet && (now - x.completedAt) < 864e5).length);
+  set('sDone',    c26.filter(x => x.sent).length);
+  set('sOverdue', c26.filter(x => !x.sent && x.idDateSet && (now - x.completedAt) >= 864e5).length);
 }
 
 function renderAlerts() {
