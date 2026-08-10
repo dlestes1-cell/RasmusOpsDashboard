@@ -923,14 +923,18 @@ app.get('/api/leader-stats', async (req, res) => {
       const jobMatch  = (p.dealname || '').match(/^(R\d+)\s+(.*)/i);
       const jobNumber = jobMatch ? jobMatch[1] : '';
       const jobName   = jobMatch ? jobMatch[2].trim() : (p.dealname || 'Untitled');
-      // Use reconciliation-adjusted total as the sale amount; fall back to standard amount
-      const rawAmt    = p.adjusted_total__after_refunds___on_site_sales_ || p.amount || null;
-      const amount    = rawAmt && parseFloat(rawAmt) > 0 ? parseFloat(rawAmt) : null;
-      const closeDate = (p.closedate || p.createdate || '').split('T')[0] || null;
-      // Parse bid count from the Stats text block
+      const closeDate  = (p.closedate || p.createdate || '').split('T')[0] || null;
+      // Parse the Stats text block for bid count and dollar totals
       const statsText  = p.commission_structure__notes_ || '';
       const bidMatch   = statsText.match(/Number of bids\t([\d,]+)/);
       const bidCount   = bidMatch ? parseInt(bidMatch[1].replace(/,/g, ''), 10) : null;
+      const maxBidMatch = statsText.match(/Amount of max bids\t\$([\d,]+\.?\d*)/);
+      const statsBidAmt = maxBidMatch ? parseFloat(maxBidMatch[1].replace(/,/g, '')) : null;
+      // Sale total: adjusted recon total → stats max bids → standard amount field
+      const rawAmt    = p.adjusted_total__after_refunds___on_site_sales_ || null;
+      const amount    = (rawAmt && parseFloat(rawAmt) > 0)
+        ? parseFloat(rawAmt)
+        : (statsBidAmt && statsBidAmt > 0 ? statsBidAmt : null);
 
       if (amount && closedMs >= ytdStart) leaderMap[leaderName].ytdTotal += amount;
 
