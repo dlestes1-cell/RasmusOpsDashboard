@@ -871,7 +871,7 @@ app.get('/api/leader-stats', async (req, res) => {
             ]
           }
         ],
-        properties: ['dealname', 'project_leader', 'hubspot_owner_id', 'closedate', 'createdate', 'dealstage', 'amount', 'marketing_projected_sales'],
+        properties: ['dealname', 'project_leader', 'closedate', 'createdate', 'dealstage', 'adjusted_total__after_refunds___on_site_sales_', 'amount', 'commission_structure__notes_'],
         limit: 100,
         sorts: [{ propertyName: 'closedate', direction: 'DESCENDING' }]
       };
@@ -902,9 +902,10 @@ app.get('/api/leader-stats', async (req, res) => {
     const leaderMap = {};
     allDeals.forEach(deal => {
       const p = deal.properties;
-      // Resolve leader: prefer project_leader custom field, fall back to hubspot_owner_id
-      const leaderId   = p.project_leader || p.hubspot_owner_id;
-      if (!leaderId || !OWNERS[leaderId]) return;  // skip deals not owned by a known leader
+      // Only attribute to the project_leader field (not hubspot_owner_id — that's the sales
+      // account manager, a different person from the field project leader)
+      const leaderId = p.project_leader;
+      if (!leaderId || !OWNERS[leaderId]) return;
       const leaderName = OWNERS[leaderId];
 
       // Use closedate if set; fall back to createdate so the deal still counts
@@ -921,9 +922,14 @@ app.get('/api/leader-stats', async (req, res) => {
       const jobMatch  = (p.dealname || '').match(/^(R\d+)\s+(.*)/i);
       const jobNumber = jobMatch ? jobMatch[1] : '';
       const jobName   = jobMatch ? jobMatch[2].trim() : (p.dealname || 'Untitled');
-      const rawAmt    = p.amount || p.marketing_projected_sales || null;
+      // Use reconciliation-adjusted total as the sale amount; fall back to standard amount
+      const rawAmt    = p.adjusted_total__after_refunds___on_site_sales_ || p.amount || null;
       const amount    = rawAmt && parseFloat(rawAmt) > 0 ? parseFloat(rawAmt) : null;
       const closeDate = (p.closedate || p.createdate || '').split('T')[0] || null;
+      // Parse bid count from the Stats text block
+      const statsText  = p.commission_structure__notes_ || '';
+      const bidMatch   = statsText.match(/Number of bids\t([\d,]+)/);
+      const bidCount   = bidMatch ? parseInt(bidMatch[1].replace(/,/g, ''), 10) : null;
 
       if (amount && closedMs >= ytdStart) leaderMap[leaderName].ytdTotal += amount;
 
@@ -933,6 +939,7 @@ app.get('/api/leader-stats', async (req, res) => {
         name:       jobName,
         closeDate,
         amount,
+        bidCount,
         hubspotUrl: `https://app.hubspot.com/contacts/46444696/record/0-3/${deal.id}`
       });
     });

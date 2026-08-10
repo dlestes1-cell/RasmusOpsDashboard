@@ -1502,24 +1502,34 @@ function renderFieldStats(data) {
         <div class="fs-tile-label">${t.label}</div>
       </div>`).join('');
 
-    const hasAmount = (l.deals || []).some(d => d.amount);
+    const hasAmount   = (l.deals || []).some(d => d.amount);
+    const hasBidCount = (l.deals || []).some(d => d.bidCount != null);
     const dealRows = (l.deals || []).map(d => {
       const dateStr = d.closeDate
         ? new Date(d.closeDate + 'T12:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })
         : '—';
-      const amtCell = d.amount != null
-        ? `<td class="fs-deal-amt">$${d.amount.toLocaleString('en-US', { minimumFractionDigits:0, maximumFractionDigits:0 })}</td>`
-        : (hasAmount ? '<td class="fs-deal-date">—</td>' : '');
+      const amtCell = hasAmount
+        ? (d.amount != null
+            ? `<td class="fs-deal-amt">$${d.amount.toLocaleString('en-US', { minimumFractionDigits:0, maximumFractionDigits:0 })}</td>`
+            : `<td class="fs-deal-date">—</td>`)
+        : '';
+      const bidCell = hasBidCount
+        ? (d.bidCount != null
+            ? `<td class="fs-deal-amt" style="color:var(--blue)">${d.bidCount.toLocaleString()}</td>`
+            : `<td class="fs-deal-date">—</td>`)
+        : '';
       return `<tr>
         <td class="fs-deal-job">${esc(d.jobNumber || '—')}</td>
         <td class="fs-deal-name">${esc(d.name)}</td>
         <td class="fs-deal-date">${dateStr}</td>
         ${amtCell}
+        ${bidCell}
         <td><a class="fs-deal-link" href="${d.hubspotUrl}" target="_blank" rel="noopener">↗ HS</a></td>
       </tr>`;
     }).join('');
 
-    const amtHeader = hasAmount ? '<th>Sale Total</th>' : '';
+    const amtHeader = hasAmount   ? '<th>Sale Total</th>' : '';
+    const bidHeader = hasBidCount ? '<th>Bids</th>'       : '';
 
     return `
       <div class="fs-card">
@@ -1536,7 +1546,7 @@ function renderFieldStats(data) {
         </button>
         <div class="fs-deals" id="fs-deals-${i}">
           <table class="fs-deal-table">
-            <thead><tr><th>Job #</th><th>Name</th><th>Closed</th>${amtHeader}<th></th></tr></thead>
+            <thead><tr><th>Job #</th><th>Name</th><th>Closed</th>${amtHeader}${bidHeader}<th></th></tr></thead>
             <tbody>${dealRows}</tbody>
           </table>
         </div>
@@ -1575,9 +1585,10 @@ function openLeaderProfile(idx) {
       <div class="lp-modal-tile-label">${t.label}</div>
     </div>`).join('');
 
-  const hasAmount = l.deals.some(d => d.amount != null);
+  const hasAmount   = l.deals.some(d => d.amount != null);
+  const hasBidCount = l.deals.some(d => d.bidCount != null);
   document.getElementById('lpmThead').innerHTML =
-    `<th>#</th><th>Job Name</th><th>Closed</th>${hasAmount ? '<th>Sale Total</th>' : ''}<th></th>`;
+    `<th>#</th><th>Job Name</th><th>Closed</th>${hasAmount ? '<th>Sale Total</th>' : ''}${hasBidCount ? '<th>Bids</th>' : ''}<th></th>`;
 
   document.getElementById('lpmBody').innerHTML = l.deals.map((d, i) => {
     const dateStr = d.closeDate
@@ -1588,11 +1599,17 @@ function openLeaderProfile(idx) {
           ? `<td class="lp-modal-amt">$${d.amount.toLocaleString('en-US', { minimumFractionDigits:0, maximumFractionDigits:0 })}</td>`
           : `<td class="lp-modal-amt none">—</td>`)
       : '';
+    const bidCell = hasBidCount
+      ? (d.bidCount != null
+          ? `<td class="lp-modal-amt" style="color:var(--blue)">${d.bidCount.toLocaleString()}</td>`
+          : `<td class="lp-modal-amt none">—</td>`)
+      : '';
     return `<tr>
       <td class="lp-modal-num">${esc(d.jobNumber || String(i + 1))}</td>
       <td class="lp-modal-jobname">${esc(d.name)}</td>
       <td class="lp-modal-date">${dateStr}</td>
       ${amtCell}
+      ${bidCell}
       <td><a class="lp-modal-hslink" href="${d.hubspotUrl}" target="_blank" rel="noopener">↗ HubSpot</a></td>
     </tr>`;
   }).join('');
