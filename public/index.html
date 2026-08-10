@@ -463,6 +463,38 @@
   .fs-deal-link { color:var(--text-dim); text-decoration:none; font-family:var(--mono); font-size:9px; opacity:0.6; }
   .fs-deal-link:hover { opacity:1; color:var(--gold); }
 
+  /* ── Leader Profile Modal ────────────────────────────────── */
+  .lp-modal-inner { background:var(--surface); border:1px solid var(--border); width:92vw; max-width:1100px; height:88vh; display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,.6); }
+  .lp-modal-hdr { padding:20px 28px 16px; border-bottom:1px solid var(--border); display:flex; align-items:flex-start; justify-content:space-between; flex-shrink:0; }
+  .lp-modal-name { font-family:var(--serif); font-size:22px; color:var(--text); margin-bottom:6px; }
+  .lp-modal-meta { font-family:var(--mono); font-size:10px; color:var(--text-dim); letter-spacing:0.06em; }
+  .lp-modal-close { background:none; border:1px solid var(--border); color:var(--text-dim); font-size:16px; width:32px; height:32px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:all 0.15s; }
+  .lp-modal-close:hover { border-color:var(--red); color:var(--red); }
+  .lp-modal-tiles { display:flex; gap:0; border-bottom:1px solid var(--border); flex-shrink:0; }
+  .lp-modal-tile { flex:1; padding:16px 20px; text-align:center; border-right:1px solid var(--border); }
+  .lp-modal-tile:last-child { border-right:none; }
+  .lp-modal-tile-val { font-family:var(--mono); font-size:28px; font-weight:600; color:var(--gold); line-height:1; margin-bottom:5px; font-variant-numeric:tabular-nums; }
+  .lp-modal-tile-val.zero { color:var(--text-dim); }
+  .lp-modal-tile-label { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-dim); }
+  .lp-modal-body { flex:1; overflow-y:auto; overflow-x:auto; }
+  .lp-modal-body::-webkit-scrollbar { width:4px; height:4px; }
+  .lp-modal-body::-webkit-scrollbar-thumb { background:var(--border); }
+  .lp-modal-table { width:100%; border-collapse:collapse; min-width:560px; }
+  .lp-modal-table th { position:sticky; top:0; padding:9px 20px; font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-dim); text-align:left; border-bottom:1px solid var(--border); background:var(--surface2); white-space:nowrap; z-index:1; }
+  .lp-modal-table td { padding:12px 20px; font-size:12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  .lp-modal-table tr:last-child td { border-bottom:none; }
+  .lp-modal-table tr:hover td { background:var(--surface3); }
+  .lp-modal-num  { font-family:var(--mono); font-size:11px; color:var(--gold-dim); white-space:nowrap; }
+  .lp-modal-jobname { color:var(--text); font-weight:500; }
+  .lp-modal-date { font-family:var(--mono); font-size:11px; color:var(--text-mid); white-space:nowrap; }
+  .lp-modal-amt  { font-family:var(--mono); font-size:12px; color:var(--green); font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:600; }
+  .lp-modal-amt.none { color:var(--text-dim); }
+  .lp-modal-hslink { color:var(--text-dim); text-decoration:none; font-family:var(--mono); font-size:10px; opacity:0.5; transition:opacity 0.15s,color 0.15s; }
+  .lp-modal-hslink:hover { opacity:1; color:var(--gold); }
+  .fs-card-hdr-btn { cursor:pointer; transition:background 0.15s; }
+  .fs-card-hdr-btn:hover { background:var(--surface3); }
+  .fs-card-hdr-expand { font-family:var(--mono); font-size:9px; color:var(--text-dim); letter-spacing:0.06em; opacity:0.7; white-space:nowrap; }
+
   /* ── Leader Pane ─────────────────────────────────────────── */
   #leaderPane { display:none; flex-direction:column; flex:1; min-height:0; overflow-y:auto; }
   #leaderPane.visible { display:flex; }
@@ -652,6 +684,26 @@
     <div class="modal-btns">
       <button class="btn-secondary" onclick="closeEditLeader()">Cancel</button>
       <button class="btn-primary" onclick="saveEditLeader()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Leader Profile Modal -->
+<div class="modal-overlay" id="leaderProfileModal" onclick="closeLeaderProfile(event)">
+  <div class="lp-modal-inner" onclick="event.stopPropagation()">
+    <div class="lp-modal-hdr">
+      <div>
+        <div class="lp-modal-name" id="lpmName"></div>
+        <div class="lp-modal-meta" id="lpmMeta"></div>
+      </div>
+      <button class="lp-modal-close" onclick="closeLeaderProfile()">&times;</button>
+    </div>
+    <div class="lp-modal-tiles" id="lpmTiles"></div>
+    <div class="lp-modal-body">
+      <table class="lp-modal-table">
+        <thead><tr id="lpmThead"></tr></thead>
+        <tbody id="lpmBody"></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -1468,8 +1520,9 @@ function renderFieldStats(data) {
 
     return `
       <div class="fs-card">
-        <div class="fs-card-hdr">
+        <div class="fs-card-hdr fs-card-hdr-btn" onclick="openLeaderProfile(${i})" title="Expand full view">
           <div class="fs-card-name">${esc(l.name)}</div>
+          <div class="fs-card-hdr-expand">⤢ full view</div>
         </div>
         <div class="fs-tiles">${tiles}</div>
         <button class="fs-card-toggle" onclick="toggleFsDeals(this, 'fs-deals-${i}')">
@@ -1490,6 +1543,59 @@ function toggleFsDeals(btn, id) {
   if (!panel) return;
   const open = panel.classList.toggle('open');
   btn.classList.toggle('open', open);
+}
+
+function openLeaderProfile(idx) {
+  const data = fieldStatsCache;
+  if (!data || !data.leaders) return;
+  const l = data.leaders[idx];
+  if (!l) return;
+
+  document.getElementById('lpmName').textContent = l.name;
+  document.getElementById('lpmMeta').textContent =
+    `${l.deals.length} completed job${l.deals.length !== 1 ? 's' : ''} · last 12 months`;
+
+  document.getElementById('lpmTiles').innerHTML = [
+    { val: l.m3,  label: '3 mo'  },
+    { val: l.m6,  label: '6 mo'  },
+    { val: l.m9,  label: '9 mo'  },
+    { val: l.m12, label: '12 mo' }
+  ].map(t => `
+    <div class="lp-modal-tile">
+      <div class="lp-modal-tile-val${t.val === 0 ? ' zero' : ''}">${t.val}</div>
+      <div class="lp-modal-tile-label">${t.label}</div>
+    </div>`).join('');
+
+  const hasAmount = l.deals.some(d => d.amount != null);
+  document.getElementById('lpmThead').innerHTML =
+    `<th>#</th><th>Job Name</th><th>Closed</th>${hasAmount ? '<th>Sale Total</th>' : ''}<th></th>`;
+
+  document.getElementById('lpmBody').innerHTML = l.deals.map((d, i) => {
+    const dateStr = d.closeDate
+      ? new Date(d.closeDate + 'T12:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })
+      : '—';
+    const amtCell = hasAmount
+      ? (d.amount != null
+          ? `<td class="lp-modal-amt">$${d.amount.toLocaleString('en-US', { minimumFractionDigits:0, maximumFractionDigits:0 })}</td>`
+          : `<td class="lp-modal-amt none">—</td>`)
+      : '';
+    return `<tr>
+      <td class="lp-modal-num">${esc(d.jobNumber || String(i + 1))}</td>
+      <td class="lp-modal-jobname">${esc(d.name)}</td>
+      <td class="lp-modal-date">${dateStr}</td>
+      ${amtCell}
+      <td><a class="lp-modal-hslink" href="${d.hubspotUrl}" target="_blank" rel="noopener">↗ HubSpot</a></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('leaderProfileModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLeaderProfile(e) {
+  if (e && e.target !== document.getElementById('leaderProfileModal')) return;
+  document.getElementById('leaderProfileModal').classList.remove('open');
+  document.body.style.overflow = '';
 }
 
 // ── Calendar ──────────────────────────────────────────────────
