@@ -928,8 +928,8 @@ app.get('/api/leader-stats', async (req, res) => {
       const statsText  = p.commission_structure__notes_ || '';
       const bidMatch   = statsText.match(/Number of bids\t([\d,]+)/);
       const bidCount   = bidMatch ? parseInt(bidMatch[1].replace(/,/g, ''), 10) : null;
-      const maxBidMatch = statsText.match(/Amount of max bids\t\$([\d,]+\.?\d*)/);
-      const statsBidAmt = maxBidMatch ? parseFloat(maxBidMatch[1].replace(/,/g, '')) : null;
+      const amtBidsMatch = statsText.match(/Amount of bids\t\$([\d,]+\.?\d*)/);
+      const statsBidAmt  = amtBidsMatch ? parseFloat(amtBidsMatch[1].replace(/,/g, '')) : null;
       // Sale total: adjusted recon total → stats max bids → standard amount field
       const rawAmt    = p.adjusted_total__after_refunds___on_site_sales_ || null;
       const amount    = (rawAmt && parseFloat(rawAmt) > 0)
