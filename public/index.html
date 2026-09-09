@@ -1002,18 +1002,20 @@
 // token in page JS gates URL discovery, not a determined attacker.
 let adminToken = localStorage.getItem('adminToken') || '';
 
-function promptForToken() {
-  const t = window.prompt('Admin token required for this dashboard:');
-  if (!t) return;
-  adminToken = t.trim();
-  localStorage.setItem('adminToken', adminToken);
-  location.reload();
-}
+// One prompt per page load. Several /api/ calls and the socket can come back
+// unauthorized at once, and window.prompt blocks — without this guard a fresh
+// browser stacks up a prompt per in-flight request.
+let authPromptShown = false;
 
-function clearTokenAndPrompt() {
+function requestToken() {
+  if (authPromptShown) return;
+  authPromptShown = true;
   localStorage.removeItem('adminToken');
   adminToken = '';
-  promptForToken();
+  const t = window.prompt('Admin token required for this dashboard:');
+  if (!t || !t.trim()) return;   // cancelled — reload to try again
+  localStorage.setItem('adminToken', t.trim());
+  location.reload();
 }
 
 // Wrap fetch once so no call site can forget the header.
@@ -1022,10 +1024,14 @@ window.fetch = async (input, init = {}) => {
   const url = typeof input === 'string' ? input : (input && input.url) || '';
   const isApi = url.startsWith('/api/');
   if (isApi && adminToken) {
-    init = { ...init, headers: { ...(init.headers || {}), 'X-Admin-Token': adminToken } };
+    // Headers() normalises plain objects, arrays, and Headers instances alike;
+    // spreading would silently drop a Headers instance.
+    const headers = new Headers(init.headers || {});
+    headers.set('X-Admin-Token', adminToken);
+    init = { ...init, headers };
   }
   const res = await rawFetch(input, init);
-  if (isApi && res.status === 401) clearTokenAndPrompt();
+  if (isApi && res.status === 401) requestToken();
   return res;
 };
 
@@ -1061,7 +1067,7 @@ function connect() {
     // 4401 is our own unauthorized close — reconnecting would just loop.
     if (ev.code === 4401) {
       setWsStatus('error', 'unauthorized');
-      clearTokenAndPrompt();
+      requestToken();
       return;
     }
     setWsStatus('error', 'reconnecting…');
