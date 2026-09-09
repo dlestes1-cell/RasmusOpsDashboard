@@ -37,7 +37,8 @@ public/
 | `GMAIL_CLIENT_ID` | Gmail OAuth2 client ID |
 | `GMAIL_CLIENT_SECRET` | Gmail OAuth2 client secret |
 | `GMAIL_REFRESH_TOKEN` | Gmail OAuth2 refresh token (destes@rasmus.com) |
-| `ADMIN_TOKEN` | If set, **every** `/api/*` route (GET included) requires the `X-Admin-Token` header, and the WebSocket requires `?token=`. Unset = fully open API. Must stay set on Railway. |
+| `ADMIN_TOKEN` | If set, **every** `/api/*` route (GET included) requires the `X-Admin-Token` header, and the WebSocket requires `?token=`. Grants full access. Unset = fully open API. Must stay set on Railway. |
+| `VIEWER_TOKEN` | Optional read-only token for field leaders. Passes GET/HEAD, 403s every mutation. Requires `ADMIN_TOKEN` to be set (ignored otherwise, and ignored if identical to it). |
 | `EMAIL_ALLOWED_DOMAINS` | Optional, comma-separated. Domains Gmail may send to. Defaults to `rasmus.com`. Seller contacts already in state are always allowed. |
 | `PORT` | Set by Railway automatically |
 
@@ -195,7 +196,7 @@ Shared modal (`#draftModal`) used for both confirmation drafts and ET drafts.
 
 3. **In-memory state resets on Railway redeploy**. Upgrade path: replace `state.js` with a pg-backed equivalent. All reads/writes go through exported functions so nothing else changes.
 
-4. **Auth (ADMIN_TOKEN)**: Implemented end to end. When `ADMIN_TOKEN` is set, `server.js` gates every `/api/*` route (GET included — `/api/state` and `/api/sync/debug` expose seller contacts and raw CRM records) with a timing-safe compare, and the WebSocket handshake requires `?token=` or closes with code 4401. The browser keeps the token in `localStorage` and injects the header via a global `fetch` wrapper, so no call site can forget it. **Caveat:** a shared static token living in page JS is visible to anyone who loads the dashboard — it gates casual URL discovery, not a determined attacker. Real per-user session auth is the durable fix if this stays internet-reachable.
+4. **Auth (`auth.js`)**: Implemented end to end, two roles. When `ADMIN_TOKEN` is set, `createAuth()` gates every `/api/*` route (GET included — `/api/state` and `/api/sync/debug` expose seller contacts and raw CRM records) with a timing-safe compare, and the WebSocket handshake requires `?token=` or closes with code 4401. `VIEWER_TOKEN` is a read-only role for field leaders: GET/HEAD pass, mutations 403. The browser keeps its token in `localStorage` and injects the header via a global `fetch` wrapper, so no call site can forget it; `GET /api/auth/role` tells the page which role it holds so `body.viewer-mode` can hide controls that would only 403. **That hiding is cosmetic — the middleware is the actual gate.** **Caveat:** a shared static token living in page JS is visible to anyone who loads the dashboard, and a shared token gives no per-person audit trail or individual revocation. It gates casual URL discovery, not a determined attacker. Real per-user session auth is the durable fix if this stays internet-reachable.
 
    Prior to this change the documented middleware did not exist at all — `ADMIN_TOKEN` was referenced only in this file and read nowhere in the code.
 

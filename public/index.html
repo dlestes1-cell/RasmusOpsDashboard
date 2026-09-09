@@ -658,9 +658,38 @@
     font-family: var(--mono); font-size: 9px;
     color: var(--text-dim); letter-spacing: 0.06em;
   }
+/* ── Viewer mode ── hide every control that mutates state. The server
+   returns 403 for these regardless; this keeps leaders from seeing
+   buttons that cannot work. */
+body.viewer-mode .ai-btn,
+body.viewer-mode .sync-btn,
+body.viewer-mode .et-sent-btn,
+body.viewer-mode .et-dismiss-btn,
+body.viewer-mode .draft-btn,
+body.viewer-mode .send-btn,
+body.viewer-mode .del-btn,
+body.viewer-mode .add-btn,
+body.viewer-mode .drawer-log-btn,
+body.viewer-mode .drawer-log-input,
+body.viewer-mode .form-card { display: none !important; }
+
+#viewerBanner {
+  display: none;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--gold-dim);
+  color: var(--text-mid);
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: .04em;
+  padding: 7px 18px;
+  text-align: center;
+}
+#viewerBanner strong { color: var(--gold); font-weight: 600; }
 </style>
 </head>
 <body>
+
+<div id="viewerBanner"><strong>Read-only access</strong> &nbsp;·&nbsp; you can view all field operations data; sending, editing, and syncing are disabled.</div>
 
 <!-- Edit Leader Project Modal -->
 <div class="modal-overlay" id="editLeaderModal">
@@ -1032,8 +1061,28 @@ window.fetch = async (input, init = {}) => {
   }
   const res = await rawFetch(input, init);
   if (isApi && res.status === 401) requestToken();
+  if (isApi && res.status === 403) {
+    // Server rejected a mutation from a read-only token. Controls are hidden
+    // in viewer mode, so this only fires if one was missed.
+    alert('Read-only access — this action needs the full token.');
+  }
   return res;
 };
+
+// Viewer mode hides controls that would only 403. The server is the actual
+// gate; this is presentation so leaders are not shown buttons that fail.
+async function applyRole() {
+  try {
+    const res = await fetch('/api/auth/role');
+    if (!res.ok) return;
+    const { role } = await res.json();
+    if (role === 'viewer') {
+      document.body.classList.add('viewer-mode');
+      const b = document.getElementById('viewerBanner');
+      if (b) b.style.display = 'block';
+    }
+  } catch {}
+}
 
 // ── WebSocket connection ───────────────────────────────────────
 const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -2265,6 +2314,7 @@ function updateHubspotStats() {
 }
 
 // Load on startup + refresh every 5 minutes
+applyRole();
 loadHubspotProjects();
 setInterval(loadHubspotProjects, 5 * 60 * 1000);
 </script>

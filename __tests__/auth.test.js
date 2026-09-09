@@ -3,8 +3,8 @@ const { createAuth } = require('../auth');
 const TOKEN = 'correct-horse-battery-staple';
 
 // Minimal express req/res doubles — enough for the middleware contract.
-function mockReq(headerValue) {
-  return { get: (name) => (name === 'X-Admin-Token' ? headerValue : undefined) };
+function mockReq(headerValue, method = 'GET') {
+  return { method, get: (name) => (name === 'X-Admin-Token' ? headerValue : undefined) };
 }
 
 function mockRes() {
@@ -14,11 +14,12 @@ function mockRes() {
   return res;
 }
 
-function runMiddleware(auth, headerValue) {
+function runMiddleware(auth, headerValue, method = 'GET') {
   const res = mockRes();
+  const req = mockReq(headerValue, method);
   let nextCalled = false;
-  auth.middleware(mockReq(headerValue), res, () => { nextCalled = true; });
-  return { nextCalled, res };
+  auth.middleware(req, res, () => { nextCalled = true; });
+  return { nextCalled, res, req };
 }
 
 // ── Configured (ADMIN_TOKEN set) ─────────────────────────────────
@@ -116,6 +117,69 @@ describe('auth — websocket handshake', () => {
 
   test('survives a missing host header', () => {
     expect(auth.authorizeSocket(`/?token=${TOKEN}`, undefined)).toBe(true);
+  });
+});
+
+// ── Viewer role ──────────────────────────────────────────────────
+
+const VIEWER = 'viewer-token-9f3a';
+
+describe('auth — viewer role', () => {
+  let auth;
+  beforeEach(() => { auth = createAuth(TOKEN, VIEWER); });
+
+  test('classifies each token', () => {
+    expect(auth.roleFor(TOKEN)).toBe('admin');
+    expect(auth.roleFor(VIEWER)).toBe('viewer');
+    expect(auth.roleFor('neither')).toBeNull();
+  });
+
+  test.each(['GET', 'HEAD'])('viewer may %s', (method) => {
+    const { nextCalled, res, req } = runMiddleware(auth, VIEWER, method);
+    expect(nextCalled).toBe(true);
+    expect(res.statusCode).toBeNull();
+    expect(req.authRole).toBe('viewer');
+  });
+
+  test.each(['POST', 'PATCH', 'DELETE', 'PUT'])('viewer is 403d on %s', (method) => {
+    const { nextCalled, res } = runMiddleware(auth, VIEWER, method);
+    expect(nextCalled).toBe(false);
+    expect(res.statusCode).toBe(403);
+    expect(res.body.error).toMatch(/read-only/i);
+  });
+
+  test.each(['GET', 'POST', 'PATCH', 'DELETE'])('admin may still %s', (method) => {
+    const { nextCalled, req } = runMiddleware(auth, TOKEN, method);
+    expect(nextCalled).toBe(true);
+    expect(req.authRole).toBe('admin');
+  });
+
+  test('an unknown token is 401, not 403, even on a mutation', () => {
+    const { res } = runMiddleware(auth, 'bogus', 'POST');
+    expect(res.statusCode).toBe(401);
+  });
+
+  test('viewer may open the websocket', () => {
+    expect(auth.authorizeSocket(`/?token=${VIEWER}`, 'h')).toBe(true);
+  });
+
+  test('a viewer token identical to the admin token is ignored, not demoted', () => {
+    const same = createAuth(TOKEN, TOKEN);
+    expect(same.roleFor(TOKEN)).toBe('admin');
+    expect(runMiddleware(same, TOKEN, 'POST').nextCalled).toBe(true);
+  });
+
+  test('a viewer token without an admin token does not arm the gate', () => {
+    const viewerOnly = createAuth(undefined, VIEWER);
+    expect(viewerOnly.enabled).toBe(false);
+    expect(viewerOnly.roleFor(VIEWER)).toBe('open');
+    expect(runMiddleware(viewerOnly, undefined, 'POST').nextCalled).toBe(true);
+  });
+
+  test('with no viewer token configured, only admin is accepted', () => {
+    const adminOnly = createAuth(TOKEN);
+    expect(adminOnly.roleFor(VIEWER)).toBeNull();
+    expect(adminOnly.roleFor(TOKEN)).toBe('admin');
   });
 });
 

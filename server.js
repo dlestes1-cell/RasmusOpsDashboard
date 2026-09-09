@@ -39,9 +39,13 @@ app.use(express.static(path.join(__dirname, 'public')));
 // expose seller contact details and raw CRM records, so read access needs
 // the token too. Unset ADMIN_TOKEN leaves the API open — correct for local
 // dev, never for Railway.
-const auth = createAuth(process.env.ADMIN_TOKEN);
+const auth = createAuth(process.env.ADMIN_TOKEN, process.env.VIEWER_TOKEN);
 
 app.use('/api', auth.middleware);
+
+// Lets the browser hide controls it is not allowed to use. Enforcement is in
+// the middleware above — this is only for presentation.
+app.get('/api/auth/role', (req, res) => res.json({ role: req.authRole || 'open' }));
 
 // Constrain outbound mail to rasmus.com plus contacts already synced into
 // state, so a leaked token still cannot address strangers.
