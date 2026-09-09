@@ -4,6 +4,8 @@ const http      = require('http');
 const { WebSocketServer } = require('ws');
 const path      = require('path');
 
+const { createAuth } = require('./auth');
+
 const state     = require('./state');
 const { getEmailTracking, getEmailTrackingEntry, updateEmailTracking, deleteEmailTracking } = require('./state');
 const scheduler = require('./tasks/scheduler');
@@ -32,6 +34,22 @@ function formatDateKey(dateKey) {
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ── Auth ──────────────────────────────────────────────────────
+// Gates every /api/* route, GET included: /api/state and /api/sync/debug
+// expose seller contact details and raw CRM records, so read access needs
+// the token too. Unset ADMIN_TOKEN leaves the API open — correct for local
+// dev, never for Railway.
+const auth = createAuth(process.env.ADMIN_TOKEN);
+
+app.use('/api', auth.middleware);
+
+// Constrain outbound mail to rasmus.com plus contacts already synced into
+// state, so a leaked token still cannot address strangers.
+gmail.setKnownRecipients(() => [
+  ...state.getProjects().map(p => p.contactEmail),
+  ...state.getConfirmations().map(c => c.recipient)
+].filter(Boolean));
+
 // ── WebSocket — push state to all connected clients ───────────
 function broadcast() {
   const payload = JSON.stringify({ type: 'state', data: state.getSnapshot() });
@@ -40,7 +58,15 @@ function broadcast() {
   });
 }
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
+  // The first frame is a full state snapshot, so the handshake needs the
+  // same gate as GET /api/state. Browsers cannot set headers on a WebSocket
+  // handshake, so the token rides in the query string.
+  if (!auth.authorizeSocket(req.url, req.headers.host)) {
+    console.log('[WS] Rejected unauthorized connection');
+    ws.close(4401, 'Unauthorized');
+    return;
+  }
   console.log('[WS] Client connected');
   ws.send(JSON.stringify({ type: 'state', data: state.getSnapshot() }));
   ws.on('close', () => console.log('[WS] Client disconnected'));

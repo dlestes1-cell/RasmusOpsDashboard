@@ -37,7 +37,8 @@ public/
 | `GMAIL_CLIENT_ID` | Gmail OAuth2 client ID |
 | `GMAIL_CLIENT_SECRET` | Gmail OAuth2 client secret |
 | `GMAIL_REFRESH_TOKEN` | Gmail OAuth2 refresh token (destes@rasmus.com) |
-| `ADMIN_TOKEN` | Optional — if set, all non-GET requests require `X-Admin-Token` header |
+| `ADMIN_TOKEN` | If set, **every** `/api/*` route (GET included) requires the `X-Admin-Token` header, and the WebSocket requires `?token=`. Unset = fully open API. Must stay set on Railway. |
+| `EMAIL_ALLOWED_DOMAINS` | Optional, comma-separated. Domains Gmail may send to. Defaults to `rasmus.com`. Seller contacts already in state are always allowed. |
 | `PORT` | Set by Railway automatically |
 
 ---
@@ -194,7 +195,9 @@ Shared modal (`#draftModal`) used for both confirmation drafts and ET drafts.
 
 3. **In-memory state resets on Railway redeploy**. Upgrade path: replace `state.js` with a pg-backed equivalent. All reads/writes go through exported functions so nothing else changes.
 
-4. **Admin token (ADMIN_TOKEN)**: Server-side middleware exists and blocks non-GET without the token. Client-side injection of `X-Admin-Token` header is not implemented — all fetches from the browser go through without auth.
+4. **Auth (ADMIN_TOKEN)**: Implemented end to end. When `ADMIN_TOKEN` is set, `server.js` gates every `/api/*` route (GET included — `/api/state` and `/api/sync/debug` expose seller contacts and raw CRM records) with a timing-safe compare, and the WebSocket handshake requires `?token=` or closes with code 4401. The browser keeps the token in `localStorage` and injects the header via a global `fetch` wrapper, so no call site can forget it. **Caveat:** a shared static token living in page JS is visible to anyone who loads the dashboard — it gates casual URL discovery, not a determined attacker. Real per-user session auth is the durable fix if this stays internet-reachable.
+
+   Prior to this change the documented middleware did not exist at all — `ADMIN_TOKEN` was referenced only in this file and read nowhere in the code.
 
 5. **Double import in server.js** (line 7-8): `state` is required as a module AND destructured again. Minor, doesn't break anything.
 

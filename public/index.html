@@ -996,6 +996,39 @@
 </footer>
 
 <script>
+// ── Admin token ────────────────────────────────────────────────
+// Sent as X-Admin-Token on every /api/ call and as ?token= on the socket.
+// Held in localStorage so it is entered once per browser. A shared static
+// token in page JS gates URL discovery, not a determined attacker.
+let adminToken = localStorage.getItem('adminToken') || '';
+
+function promptForToken() {
+  const t = window.prompt('Admin token required for this dashboard:');
+  if (!t) return;
+  adminToken = t.trim();
+  localStorage.setItem('adminToken', adminToken);
+  location.reload();
+}
+
+function clearTokenAndPrompt() {
+  localStorage.removeItem('adminToken');
+  adminToken = '';
+  promptForToken();
+}
+
+// Wrap fetch once so no call site can forget the header.
+const rawFetch = window.fetch.bind(window);
+window.fetch = async (input, init = {}) => {
+  const url = typeof input === 'string' ? input : (input && input.url) || '';
+  const isApi = url.startsWith('/api/');
+  if (isApi && adminToken) {
+    init = { ...init, headers: { ...(init.headers || {}), 'X-Admin-Token': adminToken } };
+  }
+  const res = await rawFetch(input, init);
+  if (isApi && res.status === 401) clearTokenAndPrompt();
+  return res;
+};
+
 // ── WebSocket connection ───────────────────────────────────────
 const proto = location.protocol === 'https:' ? 'wss' : 'ws';
 let ws, reconnectTimer;
@@ -1007,7 +1040,8 @@ let currentDraftEntryId = null;
 let jobSummaries = {};
 
 function connect() {
-  ws = new WebSocket(`${proto}://${location.host}`);
+  const qs = adminToken ? `?token=${encodeURIComponent(adminToken)}` : '';
+  ws = new WebSocket(`${proto}://${location.host}${qs}`);
 
   ws.onopen = () => {
     setWsStatus('live', 'live');
@@ -1023,7 +1057,13 @@ function connect() {
     }
   };
 
-  ws.onclose = () => {
+  ws.onclose = (ev) => {
+    // 4401 is our own unauthorized close — reconnecting would just loop.
+    if (ev.code === 4401) {
+      setWsStatus('error', 'unauthorized');
+      clearTokenAndPrompt();
+      return;
+    }
     setWsStatus('error', 'reconnecting…');
     reconnectTimer = setTimeout(connect, 4000);
   };

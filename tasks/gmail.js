@@ -11,6 +11,30 @@ function sanitizeSubject(str) {
 const GMAIL_API     = 'https://gmail.googleapis.com/gmail/v1';
 const TOKEN_URL     = 'https://oauth2.googleapis.com/token';
 
+// ── Recipient allowlist ───────────────────────────────────────
+// The send endpoints take a recipient from the request body, so without
+// this guard they are an open relay on destes@rasmus.com. This holds even
+// if ADMIN_TOKEN leaks, so it stays independent of the auth middleware.
+const ALLOWED_DOMAINS = (process.env.EMAIL_ALLOWED_DOMAINS || 'rasmus.com')
+  .split(',').map(d => d.trim().toLowerCase()).filter(Boolean);
+
+// Registered by server.js at startup. Returns the seller contact emails
+// already synced into state — legitimate external targets.
+let knownRecipients = () => [];
+function setKnownRecipients(fn) { knownRecipients = fn; }
+
+function parseAddress(to) {
+  const m = /<([^>]+)>/.exec(to || '');
+  return (m ? m[1] : String(to || '')).trim().toLowerCase();
+}
+
+function isAllowedRecipient(to) {
+  const addr = parseAddress(to);
+  if (!addr.includes('@')) return false;
+  if (ALLOWED_DOMAINS.includes(addr.slice(addr.lastIndexOf('@') + 1))) return true;
+  return knownRecipients().some(e => parseAddress(e) === addr);
+}
+
 let cachedToken     = null;
 let tokenExpiresAt  = 0;
 
@@ -64,8 +88,12 @@ async function getMessageMetadata(id) {
 }
 
 async function sendEmail(to, subject, htmlBody) {
+  if (!isAllowedRecipient(to)) {
+    console.error(`[GMAIL] Blocked send to disallowed recipient: ${to}`);
+    return { ok: false, gmailError: { error: 'Recipient not allowed' } };
+  }
   const token = await getAccessToken();
-  if (!token) { console.log('[GMAIL] No token — cannot send email'); return false; }
+  if (!token) { console.log('[GMAIL] No token — cannot send email'); return { ok: false, gmailError: { error: 'No Gmail token' } }; }
   const raw = Buffer.from(
     `To: ${to}\r\nSubject: ${sanitizeSubject(subject)}\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n${htmlBody}`
   ).toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
@@ -81,6 +109,10 @@ async function sendEmail(to, subject, htmlBody) {
 }
 
 async function createDraft(to, subject, htmlBody) {
+  if (!isAllowedRecipient(to)) {
+    console.error(`[GMAIL] Blocked draft to disallowed recipient: ${to}`);
+    return false;
+  }
   const token = await getAccessToken();
   if (!token) { console.log('[GMAIL] No token — cannot create draft'); return false; }
   const raw = Buffer.from(
@@ -97,4 +129,7 @@ async function createDraft(to, subject, htmlBody) {
   return false;
 }
 
-module.exports = { getAccessToken, searchMessages, getMessageMetadata, sendEmail, createDraft, sanitizeSubject };
+module.exports = {
+  getAccessToken, searchMessages, getMessageMetadata, sendEmail, createDraft, sanitizeSubject,
+  setKnownRecipients, isAllowedRecipient
+};
