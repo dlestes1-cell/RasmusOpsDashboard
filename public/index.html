@@ -53,6 +53,13 @@
   #alertBar.has-alerts { display:block; }
   #alertBar::-webkit-scrollbar { width:3px; }
   #alertBar::-webkit-scrollbar-thumb { background:rgba(196,98,45,0.45); }
+  /* Sticky within #alertBar's own scroll, so "Dismiss all" stays reachable
+     without scrolling back up. Opaque background — it sits over the list. */
+  .alert-bar-head { position:sticky; top:0; z-index:1; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:7px 0 6px; background:#24170f; border-bottom:1px solid rgba(196,98,45,0.3); }
+  #alertCount { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-mid); }
+  .alert-clear-all { background:none; border:1px solid rgba(196,98,45,0.4); color:var(--text-mid); font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.1em; padding:4px 10px; cursor:pointer; transition:all 0.15s; }
+  .alert-clear-all:hover:not(:disabled) { border-color:var(--red); color:var(--red); }
+  .alert-clear-all:disabled { opacity:.4; cursor:not-allowed; }
   .alert-item { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid rgba(232,74,45,0.1); font-size:12px; color:var(--red); font-family:var(--mono); gap:12px; }
   .alert-item:last-child { border-bottom:none; }
   .alert-dismiss { background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:14px; padding:0 4px; }
@@ -688,6 +695,8 @@ body.viewer-mode .del-btn,
 body.viewer-mode .add-btn,
 body.viewer-mode .drawer-log-btn,
 body.viewer-mode .drawer-log-input,
+body.viewer-mode .alert-clear-all,
+body.viewer-mode .alert-dismiss,
 body.viewer-mode .form-card { display: none !important; }
 
 #viewerBanner {
@@ -797,6 +806,10 @@ body.viewer-mode .form-card { display: none !important; }
 
 <!-- Alerts -->
 <div id="alertBar">
+  <div class="alert-bar-head">
+    <span id="alertCount"></span>
+    <button class="alert-clear-all" onclick="dismissAllAlerts()">Dismiss all</button>
+  </div>
   <div id="alertList"></div>
 </div>
 
@@ -1228,8 +1241,12 @@ function renderAlerts() {
   const alerts = state.alerts || [];
   const bar  = document.getElementById('alertBar');
   const list = document.getElementById('alertList');
-  if (!alerts.length) { bar.classList.remove('has-alerts'); return; }
+  // Clear the list too: hiding the bar alone left the dismissed alerts in the
+  // DOM, so they flashed back up the next time it was shown.
+  if (!alerts.length) { bar.classList.remove('has-alerts'); list.innerHTML = ''; return; }
   bar.classList.add('has-alerts');
+  document.getElementById('alertCount').textContent =
+    `${alerts.length} alert${alerts.length === 1 ? '' : 's'}`;
   list.innerHTML = alerts.map(a => `
     <div class="alert-item">
       <span>${esc(a.message)}</span>
@@ -1411,6 +1428,22 @@ async function deleteEmail(id) {
 }
 async function dismissAlert(id) {
   await fetch(`/api/alerts/${id}`, { method:'DELETE' });
+}
+
+// One request rather than one per alert. Confirmed because the list mixes
+// routine notices with actionable ones (overdue / urgent / reply) and there
+// is no undo — alerts live only in memory.
+async function dismissAllAlerts() {
+  const n = (state.alerts || []).length;
+  if (!n) return;
+  if (!confirm(`Dismiss all ${n} alert${n === 1 ? '' : 's'}? This cannot be undone.`)) return;
+  const btn = document.querySelector('.alert-clear-all');
+  if (btn) { btn.disabled = true; btn.textContent = 'Dismissing…'; }
+  try {
+    await fetch('/api/alerts', { method:'DELETE' });
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Dismiss all'; }
+  }
 }
 
 async function submitProject() {

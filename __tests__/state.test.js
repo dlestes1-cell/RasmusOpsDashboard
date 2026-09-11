@@ -186,6 +186,19 @@ describe('alerts', () => {
     expect(state.getAlerts().find(a => a.message === 'Remove Me')).toBeUndefined();
   });
 
+  test('clearAllAlerts empties the list and reports how many went', () => {
+    state.addAlert({ type: 'test', message: 'One' });
+    state.addAlert({ type: 'test', message: 'Two' });
+    expect(state.clearAllAlerts()).toBe(state.getAlerts().length + 2);
+    expect(state.getAlerts()).toEqual([]);
+  });
+
+  test('clearAllAlerts on an empty list is a no-op returning 0', () => {
+    state.clearAllAlerts();
+    expect(state.clearAllAlerts()).toBe(0);
+    expect(state.getAlerts()).toEqual([]);
+  });
+
   test('caps alerts at 50', () => {
     for (let i = 0; i < 60; i++) state.addAlert({ type: 'test', message: `Alert ${i}` });
     expect(state.getAlerts().length).toBe(50);

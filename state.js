@@ -109,6 +109,7 @@ function addAlert(alert) {
   if (state.alerts.length > 50) state.alerts = state.alerts.slice(0, 50); // cap
 }
 function clearAlert(id) { state.alerts = state.alerts.filter(a => a.id !== id); }
+function clearAllAlerts() { const n = state.alerts.length; state.alerts = []; return n; }
 
 // ── Full snapshot (sent to clients) ───────────────────────────
 function getSnapshot() {
@@ -126,7 +127,7 @@ module.exports = {
   getProjects, getProject, addProject, updateProject, addActivityLog, deleteProject, setProjects,
   getConfirmations, getConfirmation, addConfirmation, updateConfirmation, deleteConfirmation,
   getLeaderProjects, getLeaderProject, addLeaderProject, updateLeaderProject, deleteLeaderProject,
-  getAlerts, addAlert, clearAlert,
+  getAlerts, addAlert, clearAlert, clearAllAlerts,
   getEmailTracking, getEmailTrackingEntry, addEmailTracking, updateEmailTracking, deleteEmailTracking,
   getSnapshot
 };

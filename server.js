@@ -163,6 +163,14 @@ app.delete('/api/confirmations/:id', (req, res) => {
 });
 
 // ── Alerts ────────────────────────────────────────────────────
+// Bulk clear. Declared before the :id route for readability; Express matches
+// these two paths distinctly, so '/api/alerts' never falls through to it.
+app.delete('/api/alerts', (req, res) => {
+  const cleared = state.clearAllAlerts();
+  broadcast();
+  res.json({ ok: true, cleared });
+});
+
 app.delete('/api/alerts/:id', (req, res) => {
   state.clearAlert(req.params.id);
   broadcast();
