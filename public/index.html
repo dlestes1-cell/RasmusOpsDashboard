@@ -317,9 +317,14 @@
     .stat:nth-child(n+4) { border-bottom:none; }
     .stat-value { font-size:20px; }
 
-    /* Tabs — fill bar equally */
-    .tab-bar { padding:0; }
-    .tab-btn { flex:1; padding:10px 4px; font-size:9px; letter-spacing:0.06em; text-align:center; }
+    /* Tabs — swipeable. flex:1 did not stop them overflowing (min-width:auto
+       holds each at its text width), and the bar did not scroll, so Email
+       Tracking was clipped and Field Stats was off-screen with no way to
+       reach it. */
+    .tab-bar { padding:0 4px; flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    .tab-bar::-webkit-scrollbar { height:2px; }
+    .tab-bar::-webkit-scrollbar-thumb { background:var(--border); }
+    .tab-btn { flex:0 0 auto; white-space:nowrap; padding:12px 9px; font-size:10px; letter-spacing:0.02em; }
 
     /* Layout */
     main { grid-template-columns:1fr; }
@@ -392,6 +397,60 @@
      pill opens the drawer, which carries the full HubSpot button. */
   @media (max-width: 600px) {
     .cal-job-pill .hs-link { display:none; }
+  }
+
+  /* ── Phone ───────────────────────────────────────────────────
+     A 320-390px screen has no spare vertical space: the header, stats,
+     tab bar and footer were leaving the content pane 180px on an iPhone
+     SE. Trim the furniture, raise the smallest text, and give every
+     control a finger-sized target. */
+  @media (max-width: 600px) {
+    /* The footer is decoration; the pane below it is the whole point. */
+    footer { display:none; }
+
+    /* Stats were 192px — a third of an SE screen — for six numbers. One
+       swipeable row of value+label chips does the same job in ~40px. */
+    .stat-section-header { display:none; }
+    .stat-bar { display:flex; flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    .stat-bar::-webkit-scrollbar { height:2px; }
+    .stat-bar::-webkit-scrollbar-thumb { background:var(--border); }
+    .stat { flex:0 0 auto; display:flex; align-items:baseline; gap:6px;
+            padding:10px 14px; border-bottom:none; border-right:1px solid var(--border); }
+    .stat-label { font-size:9px; letter-spacing:0.06em; white-space:nowrap; }
+    .stat-value { font-size:15px; margin-top:0; }
+
+    /* Alerts get a smaller slice here than the 16vh used above 600px. */
+    #alertBar { max-height:13vh; }
+
+    /* Nothing carrying job data should sit at 9px on a phone. */
+    .tab-btn { font-size:10px; }
+    .fchip, .lp-chip { font-size:10px; padding:7px 12px; }
+    .et-table th, .lp-modal-table th { font-size:10px; }
+    .et-table td { font-size:12px; }
+    .pending-table th { font-size:10px; }
+    .pending-table td { font-size:12px; }
+    .cal-day-num { font-size:11px; }
+    .lp-proj-num { font-size:10px; }
+    .lp-date-label, .fs-tile-label, .drawer-section-label { font-size:10px; }
+    .lp-date-val { font-size:13px; }
+    .alert-item { font-size:12px; }
+    .drawer-sub { font-size:11px; }
+
+    /* Drawer is near enough full-width here; keep its header inside. */
+    #jobDrawer { width:100%; }
+  }
+
+  /* Finger targets, independent of viewport width — a tablet with touch
+     needs these as much as a phone does. */
+  @media (pointer: coarse) {
+    .add-btn, .ai-btn, .del-btn, .draft-btn, .send-btn, .et-sent-btn,
+    .et-dismiss-btn, .sync-btn, .view-btn, .fchip, .lp-chip, .cal-nav-btn,
+    .fs-card-toggle, .alert-clear-all, .drawer-log-btn, .btn-primary,
+    .btn-secondary { min-height:40px; }
+    .hs-btn { min-height:36px; }
+    .drawer-close { min-width:40px; min-height:40px; }
+    .search-input, .drawer-log-input, .status-select,
+    .form-group input, .form-group select { min-height:40px; }
   }
 
   @media (max-width: 400px) {
@@ -482,6 +541,36 @@
   .cal-job-pill.selling-online { background:rgba(196,154,45,0.25); color:#d4aa3d; border-left:2px solid #C49A2D; }
   .cal-job-pill.removal { background:rgba(196,98,45,0.25); color:#d4823e; border-left:2px solid #C4622D; }
   .cal-job-pill.complete { background:rgba(122,158,110,0.2); color:#7A9E6E; border-left:2px solid #7A9E6E; }
+
+  /* Agenda: the phone form of the calendar. Both structures are always
+     built — only days that actually have jobs appear here — and CSS picks
+     one, so rotating the phone needs no re-render. */
+  .cal-agenda { display:none; }
+  .cal-ag-day { border:1px solid var(--border); background:var(--surface2); margin-bottom:8px; }
+  .cal-ag-hdr { padding:8px 12px; border-bottom:1px solid var(--border); background:var(--surface); display:flex; align-items:baseline; gap:8px; }
+  .cal-ag-hdr.today { border-left:3px solid var(--gold); }
+  .cal-ag-date { font-family:var(--mono); font-size:12px; color:var(--text); letter-spacing:0.06em; }
+  .cal-ag-dow  { font-family:var(--mono); font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em; }
+  .cal-ag-today-tag { margin-left:auto; font-family:var(--mono); font-size:9px; color:var(--gold); text-transform:uppercase; letter-spacing:0.1em; }
+  .cal-ag-job { display:flex; align-items:center; gap:10px; padding:11px 12px; border-bottom:1px solid var(--border); cursor:pointer; }
+  .cal-ag-job:last-child { border-bottom:none; }
+  .cal-ag-swatch { width:3px; align-self:stretch; flex-shrink:0; border-radius:2px; }
+  .cal-ag-swatch.identification { background:#6E8EA0; }
+  .cal-ag-swatch.selling-online { background:#C49A2D; }
+  .cal-ag-swatch.removal        { background:#C4622D; }
+  .cal-ag-swatch.complete       { background:#7A9E6E; }
+  .cal-ag-text { flex:1; min-width:0; }
+  .cal-ag-job-num { display:block; font-family:var(--mono); font-size:10px; color:var(--text-dim); }
+  .cal-ag-job-name { display:block; font-size:13px; color:var(--text); line-height:1.35; }
+  .cal-ag-empty { padding:32px 16px; text-align:center; font-family:var(--mono); font-size:11px; color:var(--text-dim); }
+
+  @media (max-width: 600px) {
+    .cal-dow-row, .cal-days { display:none; }
+    .cal-agenda { display:block; }
+    .cal-grid-wrap { padding:12px 14px; }
+    .cal-header { padding:12px 14px; flex-wrap:wrap; gap:10px; }
+    .cal-legend { display:none; }
+  }
 
   /* ── Field Stats Pane ───────────────────────────────────── */
   #fieldStatsPane { display:none; flex-direction:column; flex:1; min-height:0; overflow-y:auto; background:var(--surface); }
@@ -1053,6 +1142,7 @@ body.viewer-mode .form-card { display: none !important; }
       <div class="cal-dow">Sat</div>
     </div>
     <div class="cal-days" id="calDays"></div>
+    <div class="cal-agenda" id="calAgenda"></div>
   </div>
 </div>
 
@@ -1732,6 +1822,11 @@ function switchTab(tab) {
   cal.classList.toggle('visible',        tab === 'calendar');
   email.classList.toggle('visible',      tab === 'email');
   fieldStats.classList.toggle('visible', tab === 'fieldstats');
+  // The bar scrolls horizontally on phones; make sure the tab just selected
+  // is actually on screen.
+  const activeBtn = document.querySelector('.tab-btn.active');
+  if (activeBtn && activeBtn.scrollIntoView) activeBtn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+
   if (tab === 'calendar')   renderCalendar();
   if (tab === 'email')      renderEmailTracking();
   if (tab === 'fieldstats') loadFieldStats();
@@ -1955,6 +2050,37 @@ function renderCalendar() {
   }
 
   document.getElementById('calDays').innerHTML = html;
+
+  // Agenda view (phones): only days in this month that actually carry jobs.
+  const DOW = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const todayKey = localDateKey();
+  const agendaDays = Object.keys(byDate)
+    .filter(k => { const d = new Date(k + 'T00:00:00'); return d.getFullYear() === calYear && d.getMonth() === calMonth; })
+    .sort();
+
+  document.getElementById('calAgenda').innerHTML = agendaDays.length
+    ? agendaDays.map(key => {
+        const d = new Date(key + 'T00:00:00');
+        const isToday = key === todayKey;
+        return `
+        <div class="cal-ag-day">
+          <div class="cal-ag-hdr${isToday ? ' today' : ''}">
+            <span class="cal-ag-date">${MONTHS[d.getMonth()].slice(0,3)} ${d.getDate()}</span>
+            <span class="cal-ag-dow">${DOW[d.getDay()]}</span>
+            ${isToday ? '<span class="cal-ag-today-tag">Today</span>' : ''}
+          </div>
+          ${byDate[key].map(p => `
+            <div class="cal-ag-job" onclick="openJobDrawer('${p.id}')">
+              <span class="cal-ag-swatch ${p.status}"></span>
+              <span class="cal-ag-text">
+                ${p.jobNumber ? `<span class="cal-ag-job-num">${esc(p.jobNumber)}</span>` : ''}
+                <span class="cal-ag-job-name">${esc(p.name)}</span>
+              </span>
+              ${hsIcon(p.hubspotId)}
+            </div>`).join('')}
+        </div>`;
+      }).join('')
+    : `<div class="cal-ag-empty">No auctions scheduled in ${MONTHS[calMonth]} ${calYear}.</div>`;
 }
 
 // ── Email Tracking ────────────────────────────────────────────
