@@ -24,6 +24,9 @@ jest.mock('../state', () => ({
   addLeaderProject:    (...a) => stateMocks.addLeaderProject(...a),
   updateLeaderProject: (...a) => stateMocks.updateLeaderProject(...a),
   deleteLeaderProject: (...a) => stateMocks.deleteLeaderProject(...a),
+  getEmailTracking:    (...a) => stateMocks.getEmailTracking(...a),
+  addEmailTracking:    (...a) => stateMocks.addEmailTracking(...a),
+  updateEmailTracking: (...a) => stateMocks.updateEmailTracking(...a),
 }));
 
 global.fetch = jest.fn();
@@ -42,9 +45,12 @@ beforeEach(() => {
   stateMocks.addLeaderProject    = jest.fn();
   stateMocks.updateLeaderProject = jest.fn();
   stateMocks.deleteLeaderProject = jest.fn();
+  stateMocks.getEmailTracking    = jest.fn().mockReturnValue([]);
+  stateMocks.addEmailTracking    = jest.fn();
+  stateMocks.updateEmailTracking = jest.fn();
 });
 
-const { normalizeLeader, stageToStatus, runConfirmationCheck, syncConfirmations } = require('../tasks/scheduler');
+const { normalizeLeader, stageToStatus, runConfirmationCheck, syncConfirmations, runHubSpotSync } = require('../tasks/scheduler');
 
 // ── normalizeLeader ───────────────────────────────────────────────
 
@@ -235,5 +241,50 @@ describe('syncConfirmations', () => {
       idDateSet: true,
       completedAt: expect.any(Number)
     }));
+  });
+});
+
+// ── runHubSpotSync alerting ───────────────────────────────────────
+// A routine successful sync runs every 5 minutes. It must not file an alert:
+// against the 50-alert cap in state.js that buries the actionable ones
+// (overdue / urgent / reply / failure) within a few hours, and an unbounded
+// alert bar starves the content pane of height. Failures must still alert.
+describe('runHubSpotSync alerting', () => {
+  const OLD_KEY = process.env.HUBSPOT_API_KEY;
+  beforeEach(() => { process.env.HUBSPOT_API_KEY = 'test-key'; });
+  afterAll(() => {
+    if (OLD_KEY === undefined) delete process.env.HUBSPOT_API_KEY;
+    else process.env.HUBSPOT_API_KEY = OLD_KEY;
+  });
+
+  const hsResponse = (body, status = 200) => ({
+    status, statusText: 'OK',
+    headers: { entries: () => [] },
+    text: async () => JSON.stringify(body),
+  });
+
+  test('files no alert when the sync succeeds', async () => {
+    global.fetch.mockResolvedValue(hsResponse({ results: [] }));
+    await runHubSpotSync();
+    expect(stateMocks.setProjects).toHaveBeenCalled();
+    expect(stateMocks.addAlert).not.toHaveBeenCalled();
+  });
+
+  test('still alerts when the request throws', async () => {
+    global.fetch.mockRejectedValue(new Error('ECONNRESET'));
+    await runHubSpotSync();
+    expect(stateMocks.addAlert).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'error', message: expect.stringContaining('ECONNRESET') }));
+  });
+
+  test('still alerts when the response is not JSON', async () => {
+    global.fetch.mockResolvedValue({
+      status: 502, statusText: 'Bad Gateway',
+      headers: { entries: () => [] },
+      text: async () => '<html>gateway error</html>',
+    });
+    await runHubSpotSync();
+    expect(stateMocks.addAlert).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'error', message: expect.stringContaining('unparseable') }));
   });
 });

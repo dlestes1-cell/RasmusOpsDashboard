@@ -391,7 +391,11 @@ async function runHubSpotSync() {
     syncLeaderProjects(deals);
     syncConfirmations(deals, contactMap);
     syncEmailTracking(getProjects());
-    addAlert({ type:'sync', message:`SYNC: HubSpot sync — ${projects.length} active deals at ${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}` });
+    // No alert on a routine successful sync. This ran every 5 minutes and,
+    // against the 50-alert cap in state.js, buried the actionable alerts
+    // (overdue / urgent / reply / failure) in sync noise within a few hours.
+    // The header already reports it live: the broadcast below drives
+    // setLastSync() in the page, next to the WebSocket status dot.
     console.log(`[TASK] HubSpot: ${projects.length} projects loaded`);
     if (broadcast) broadcast();
   } catch (e) {
