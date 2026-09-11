@@ -53,6 +53,18 @@
   #alertBar.has-alerts { display:block; }
   #alertBar::-webkit-scrollbar { width:3px; }
   #alertBar::-webkit-scrollbar-thumb { background:rgba(196,98,45,0.45); }
+  /* Access gate — sits above everything, including the job drawer (z 900). */
+  #authGate { display:none; position:fixed; inset:0; z-index:2000; background:rgba(8,7,6,0.92); align-items:center; justify-content:center; padding:24px; }
+  #authGate.open { display:flex; }
+  .auth-gate-inner { background:var(--surface); border:1px solid var(--border); padding:28px 26px; width:100%; max-width:420px; display:flex; flex-direction:column; gap:12px; box-shadow:0 20px 60px rgba(0,0,0,0.6); }
+  .auth-gate-title { font-family:var(--serif); font-size:19px; color:var(--text); }
+  .auth-gate-msg { font-family:var(--mono); font-size:11px; line-height:1.5; color:var(--text-dim); }
+  .auth-gate-input { background:var(--bg); border:1px solid var(--border); color:var(--text); font-family:var(--mono); font-size:13px; padding:11px 12px; width:100%; }
+  .auth-gate-input:focus { outline:none; border-color:var(--gold); }
+  .auth-gate-reveal { font-family:var(--mono); font-size:10px; color:var(--text-dim); display:flex; align-items:center; gap:6px; cursor:pointer; }
+  .auth-gate-btn { background:var(--gold); border:none; color:#1a1510; font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.12em; padding:11px; cursor:pointer; transition:opacity 0.15s; }
+  .auth-gate-btn:hover { opacity:0.88; }
+
   /* Sticky within #alertBar's own scroll, so "Dismiss all" stays reachable
      without scrolling back up. Opaque background — it sits over the list. */
   .alert-bar-head { position:sticky; top:0; z-index:1; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:7px 0 6px; background:#24170f; border-bottom:1px solid rgba(196,98,45,0.3); }
@@ -1054,6 +1066,22 @@ body.viewer-mode .form-card { display: none !important; }
   <div class="footer-text">Rasmus Auctions · Field Operations Dashboard · Railway</div>
 </footer>
 
+<!-- Access gate. Shown on a 401; the only reliable way to enter a token,
+     since browsers can suppress window.prompt entirely. -->
+<div id="authGate">
+  <form class="auth-gate-inner" onsubmit="event.preventDefault();submitToken()">
+    <div class="auth-gate-title">Access Token Required</div>
+    <div class="auth-gate-msg" id="authGateMsg">Enter your dashboard access token to continue.</div>
+    <input class="auth-gate-input" id="authGateInput" type="password" autocomplete="current-password"
+           spellcheck="false" autocapitalize="off" placeholder="Paste token…" />
+    <label class="auth-gate-reveal">
+      <input type="checkbox" onchange="document.getElementById('authGateInput').type = this.checked ? 'text' : 'password'" />
+      Show token
+    </label>
+    <button class="auth-gate-btn" type="submit">Unlock Dashboard</button>
+  </form>
+</div>
+
 <script>
 // ── Admin token ────────────────────────────────────────────────
 // Sent as X-Admin-Token on every /api/ call and as ?token= on the socket.
@@ -1061,19 +1089,48 @@ body.viewer-mode .form-card { display: none !important; }
 // token in page JS gates URL discovery, not a determined attacker.
 let adminToken = localStorage.getItem('adminToken') || '';
 
-// One prompt per page load. Several /api/ calls and the socket can come back
-// unauthorized at once, and window.prompt blocks — without this guard a fresh
-// browser stacks up a prompt per in-flight request.
+// A ?token= in the URL signs this browser in, so a link can carry access to a
+// device that has no convenient way to type one. It is consumed immediately:
+// stored, then stripped from the address bar with replaceState so it is not
+// left sitting on screen or re-shared by copying the URL. It still lands in
+// browser history, so a link is a convenience, not a secret-safe channel.
+(function consumeTokenFromUrl() {
+  const u = new URL(location.href);
+  const t = (u.searchParams.get('token') || '').trim();
+  if (!t) return;
+  localStorage.setItem('adminToken', t);
+  adminToken = t;
+  u.searchParams.delete('token');
+  history.replaceState(null, '', u.pathname + (u.search || '') + u.hash);
+})();
+
+// One gate per page load. Several /api/ calls and the socket can come back
+// unauthorized at once; without this guard each one reopens the panel.
 let authPromptShown = false;
 
-function requestToken() {
+// An in-page panel rather than window.prompt. Chrome suppresses prompts once
+// a user dismisses one ("prevent this page from creating additional dialogs")
+// and blocks them outright in some embedded contexts — which left no way at
+// all to enter a token, on a page that cannot load without one.
+function requestToken(message) {
   if (authPromptShown) return;
   authPromptShown = true;
   localStorage.removeItem('adminToken');
   adminToken = '';
-  const t = window.prompt('Admin token required for this dashboard:');
-  if (!t || !t.trim()) return;   // cancelled — reload to try again
-  localStorage.setItem('adminToken', t.trim());
+  const gate = document.getElementById('authGate');
+  if (!gate) return;
+  if (message) document.getElementById('authGateMsg').textContent = message;
+  gate.classList.add('open');
+  const input = document.getElementById('authGateInput');
+  input.value = '';
+  input.focus();
+}
+
+function submitToken() {
+  const input = document.getElementById('authGateInput');
+  const t = input.value.trim();
+  if (!t) { document.getElementById('authGateMsg').textContent = 'Enter a token to continue.'; input.focus(); return; }
+  localStorage.setItem('adminToken', t);
   location.reload();
 }
 
