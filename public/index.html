@@ -16,8 +16,13 @@
     --serif: 'Playfair Display', serif;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:var(--bg); color:var(--text); font-family:var(--sans); height:100vh; overflow:hidden; display:flex; flex-direction:column; }
-  #tabContent { flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:column; }
+  /* 100dvh tracks the visible viewport on mobile, where 100vh overshoots by
+     the browser chrome and pushed the footer over the content. */
+  body { background:var(--bg); color:var(--text); font-family:var(--sans); height:100vh; height:100dvh; overflow:hidden; display:flex; flex-direction:column; }
+  /* The bars around the content are sized by their own content; only
+     #tabContent flexes, so they must not steal its space by growing. */
+  body > header, body > .stat-section, body > .tab-bar, body > footer { flex:0 0 auto; }
+  #tabContent { flex:1 1 auto; min-height:180px; overflow:hidden; display:flex; flex-direction:column; }
   #opsContent { flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:column; }
   main#opsPane { flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:row; }
   main#opsPane > .panel { flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:column; }
@@ -41,8 +46,13 @@
   @keyframes spin { to { transform:rotate(360deg); } }
 
   /* Alerts bar */
-  #alertBar { display:none; background:rgba(196,98,45,0.12); border-bottom:1px solid rgba(196,98,45,0.3); padding:0 28px; }
+  /* Capped and scrollable: alerts accumulate in memory and an uncapped bar
+     grows until it starves #tabContent of height — at ~13 alerts the panes
+     hit 0px on a phone and nothing below the bar was reachable. */
+  #alertBar { display:none; background:rgba(196,98,45,0.12); border-bottom:1px solid rgba(196,98,45,0.3); padding:0 28px; flex:0 0 auto; max-height:22vh; overflow-y:auto; }
   #alertBar.has-alerts { display:block; }
+  #alertBar::-webkit-scrollbar { width:3px; }
+  #alertBar::-webkit-scrollbar-thumb { background:rgba(196,98,45,0.45); }
   .alert-item { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid rgba(232,74,45,0.1); font-size:12px; color:var(--red); font-family:var(--mono); gap:12px; }
   .alert-item:last-child { border-bottom:none; }
   .alert-dismiss { background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:14px; padding:0 4px; }
@@ -264,9 +274,12 @@
     .last-sync-ts { display:none; }
     .sync-btn { padding:7px 10px; }
 
+    /* Alerts — tighter cap; vh is scarcer on a phone */
+    #alertBar { padding:0 14px; max-height:16vh; }
+
     /* Stats — 3-col grid, 2 rows */
     .stat-bar { display:grid; grid-template-columns:repeat(3,1fr); }
-    .stat { padding:10px 12px; border-right:1px solid var(--border); border-bottom:1px solid var(--border); min-width:0; }
+    .stat { padding:8px 12px 9px; border-right:1px solid var(--border); border-bottom:1px solid var(--border); min-width:0; }
     .stat:nth-child(3n) { border-right:none; }
     .stat:nth-child(n+4) { border-bottom:none; }
     .stat-value { font-size:20px; }
@@ -433,7 +446,11 @@
   .fs-title  { font-family:var(--serif); font-size:16px; color:var(--text); margin-bottom:3px; }
   .fs-subtitle { font-family:var(--mono); font-size:10px; color:var(--text-dim); letter-spacing:0.06em; }
   .fs-asof   { font-family:var(--mono); font-size:9px; color:var(--text-dim); letter-spacing:0.06em; }
-  .fs-body   { flex:1; overflow-y:auto; padding:20px 24px; display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; align-content:start; }
+  /* grid-auto-rows:max-content keeps rows at their content height. Without it
+     the definite-height grid compresses rows to fit, so .fs-card (overflow:hidden)
+     clips its own content and .fs-body never overflows enough to scroll — cards
+     squashed to 34px on a phone, and an expanded .fs-deals table cut off. */
+  .fs-body   { flex:1; overflow-y:auto; padding:20px 24px; display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); grid-auto-rows:max-content; gap:14px; align-content:start; }
   .fs-body::-webkit-scrollbar { width:3px; }
   .fs-body::-webkit-scrollbar-thumb { background:var(--border); }
   .fs-loading { grid-column:1/-1; padding:40px 0; text-align:center; font-family:var(--mono); font-size:11px; color:var(--text-dim); letter-spacing:0.06em; }
