@@ -373,6 +373,13 @@
   }
 
   /* Extra-small phones — single column everything */
+  /* Below this the month grid gives each day ~45px — a job name and a glyph
+     cannot both fit, and the name is what makes the pill useful. Tapping the
+     pill opens the drawer, which carries the full HubSpot button. */
+  @media (max-width: 600px) {
+    .cal-job-pill .hs-link { display:none; }
+  }
+
   @media (max-width: 400px) {
     #projectList.grid-view { grid-template-columns:1fr; }
     .stat-bar { grid-template-columns:repeat(2,1fr); }
@@ -443,15 +450,19 @@
   .cal-legend-item { display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:9px; color:var(--text-dim); letter-spacing:0.08em; text-transform:uppercase; }
   .cal-legend-dot { width:8px; height:8px; border-radius:2px; }
   .cal-grid-wrap { flex:1; overflow-y:auto; padding:16px 24px; }
-  .cal-dow-row { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-bottom:4px; }
+  .cal-dow-row { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; margin-bottom:4px; }
   .cal-dow { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-dim); text-align:center; padding:4px 0; }
-  .cal-days { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
-  .cal-day { min-height:90px; background:var(--surface2); border:1px solid var(--border); padding:6px; display:flex; flex-direction:column; gap:3px; }
+  .cal-days { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; }
+  .cal-day { min-height:90px; min-width:0; background:var(--surface2); border:1px solid var(--border); padding:6px; display:flex; flex-direction:column; gap:3px; }
   .cal-day.other-month { opacity:0.35; }
   .cal-day.today { border-color:var(--gold); }
   .cal-day-num { font-family:var(--mono); font-size:10px; color:var(--text-dim); margin-bottom:2px; }
   .cal-day.today .cal-day-num { color:var(--gold); font-weight:600; }
-  .cal-job-pill { font-family:var(--mono); font-size:9px; padding:2px 6px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-radius:2px; transition:opacity 0.15s; line-height:1.4; }
+  .cal-job-pill { font-family:var(--mono); font-size:9px; padding:2px 6px; cursor:pointer; border-radius:2px; transition:opacity 0.15s; line-height:1.4; display:flex; align-items:center; gap:4px; overflow:hidden; }
+  /* min-width:0 lets the label shrink so the ↗ is never pushed out of the cell. */
+  .cal-pill-label { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cal-job-pill .hs-link { font-size:10px; line-height:1; opacity:0.75; }
+  .cal-job-pill .hs-link:hover { opacity:1; }
   .cal-job-pill:hover { opacity:0.8; }
   .cal-job-pill.identification { background:rgba(110,142,160,0.25); color:#9ab8ca; border-left:2px solid #6E8EA0; }
   .cal-job-pill.selling-online { background:rgba(196,154,45,0.25); color:#d4aa3d; border-left:2px solid #C49A2D; }
@@ -1903,7 +1914,7 @@ function renderCalendar() {
     html += `<div class="cal-day-num">${date.getDate()}</div>`;
     jobs.forEach(p => {
       const label = (p.jobNumber ? p.jobNumber + ' ' : '') + p.name;
-      html += `<div class="cal-job-pill ${p.status}" onclick="openJobDrawer('${p.id}')" title="${esc(p.name)}">${esc(label)}</div>`;
+      html += `<div class="cal-job-pill ${p.status}" onclick="openJobDrawer('${p.id}')" title="${esc(p.name)}"><span class="cal-pill-label">${esc(label)}</span>${hsIcon(p.hubspotId)}</div>`;
     });
     html += `</div>`;
   }
