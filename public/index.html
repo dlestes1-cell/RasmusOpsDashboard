@@ -583,6 +583,24 @@
      the definite-height grid compresses rows to fit, so .fs-card (overflow:hidden)
      clips its own content and .fs-body never overflows enough to scroll — cards
      squashed to 34px on a phone, and an expanded .fs-deals table cut off. */
+  /* Company all-time band. Covers only leader-attributed jobs — the legacy
+     "Archived Podio" stage carries no project_leader, so those rows cannot be
+     credited to anyone and are out of scope for this tab. */
+  .fs-alltime { display:none; flex-shrink:0; padding:10px 24px; background:var(--surface2);
+                border-bottom:1px solid var(--border); align-items:baseline; gap:14px; flex-wrap:wrap; }
+  .fs-alltime.shown { display:flex; }
+  .fs-at-label { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-dim); }
+  .fs-at-val   { font-family:var(--mono); font-size:15px; font-weight:600; color:var(--gold); font-variant-numeric:tabular-nums; }
+  .fs-at-money { font-family:var(--mono); font-size:15px; font-weight:600; color:var(--green); font-variant-numeric:tabular-nums; }
+  .fs-at-since { font-family:var(--mono); font-size:9px; color:var(--text-dim); margin-left:auto; letter-spacing:0.06em; }
+
+  /* Per-leader all-time strip between the card header and the quarter tiles. */
+  .fs-at-row { display:flex; align-items:baseline; gap:8px; padding:7px 16px;
+               background:var(--bg); border-bottom:1px solid var(--border); }
+  .fs-at-row-label { font-family:var(--mono); font-size:8px; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-dim); }
+  .fs-at-row-jobs  { font-family:var(--mono); font-size:11px; color:var(--text-mid); }
+  .fs-at-row-amt   { font-family:var(--mono); font-size:12px; font-weight:600; color:var(--green); margin-left:auto; font-variant-numeric:tabular-nums; }
+
   .fs-body   { flex:1; overflow-y:auto; padding:20px 24px; display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); grid-auto-rows:max-content; gap:14px; align-content:start; }
   .fs-body::-webkit-scrollbar { width:3px; }
   .fs-body::-webkit-scrollbar-thumb { background:var(--border); }
@@ -634,6 +652,7 @@
   .lp-modal-inner { background:var(--surface); border:1px solid var(--border); width:92vw; max-width:1100px; height:88vh; display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,.6); }
   .lp-modal-hdr { padding:20px 28px 16px; border-bottom:1px solid var(--border); display:flex; align-items:flex-start; justify-content:space-between; flex-shrink:0; }
   .lp-modal-name { font-family:var(--serif); font-size:22px; color:var(--text); margin-bottom:6px; }
+  .lpm-alltime { display:inline-block; margin-top:4px; color:var(--text-mid); }
   .lp-modal-meta { font-family:var(--mono); font-size:10px; color:var(--text-dim); letter-spacing:0.06em; }
   .lp-modal-close { background:none; border:1px solid var(--border); color:var(--text-dim); font-size:16px; width:32px; height:32px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:all 0.15s; }
   .lp-modal-close:hover { border-color:var(--red); color:var(--red); }
@@ -1215,6 +1234,7 @@ body.viewer-mode .form-card { display: none !important; }
       <button class="sync-btn" id="fsRefreshBtn" onclick="loadFieldStats()">⟳ Refresh</button>
     </div>
   </div>
+  <div class="fs-alltime" id="fsAllTime"></div>
   <div class="fs-body" id="fieldStatsList">
     <div class="fs-loading">Loading…</div>
   </div>
@@ -1887,6 +1907,27 @@ function renderFieldStats(data) {
     asOf.textContent = 'as of ' + d.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
   }
 
+  const band = document.getElementById('fsAllTime');
+  if (band) {
+    const at = data.allTime;
+    if (at && at.jobs) {
+      const since = at.since
+        ? new Date(at.since + 'T12:00:00').toLocaleDateString('en-US', { month:'short', year:'numeric' })
+        : null;
+      band.className = 'fs-alltime shown';
+      band.innerHTML = `
+        <span class="fs-at-label">All time</span>
+        <span class="fs-at-val">${at.jobs.toLocaleString()}</span>
+        <span class="fs-at-label">jobs</span>
+        <span class="fs-at-money">${fmtMoneyFull(at.amount)}</span>
+        <span class="fs-at-label">in sales</span>
+        ${since ? `<span class="fs-at-since">every job with a project leader recorded · since ${since}</span>` : ''}`;
+    } else {
+      band.className = 'fs-alltime';
+      band.innerHTML = '';
+    }
+  }
+
   const leaders = data.leaders || [];
   if (!leaders.length) {
     list.innerHTML = '<div class="fs-empty">No completed jobs found in the last 12 months.</div>';
@@ -1914,6 +1955,12 @@ function renderFieldStats(data) {
             <div class="fs-card-hdr-expand">⤢ full view</div>
           </div>
         </div>
+        ${l.allTime && l.allTime.jobs ? `
+        <div class="fs-at-row" title="Every job on record for ${esc(l.name)}${l.allTime.firstClose ? `, from ${l.allTime.firstClose}` : ''}">
+          <span class="fs-at-row-label">All time</span>
+          <span class="fs-at-row-jobs">${l.allTime.jobs} job${l.allTime.jobs !== 1 ? 's' : ''}</span>
+          <span class="fs-at-row-amt">${fmtMoneyFull(l.allTime.amount)}</span>
+        </div>` : ''}
         <div class="fs-tiles">${tiles}</div>
         <button class="fs-card-toggle" onclick="toggleFsDeals(this, 'fs-deals-${i}')">
           <span class="toggle-arrow">▶</span> ${l.deals.length} job${l.deals.length !== 1 ? 's' : ''}
@@ -1997,11 +2044,16 @@ function openLeaderProfile(idx) {
   if (!l) return;
 
   document.getElementById('lpmName').textContent = l.name;
-  const ytdStr = l.ytdTotal > 0
-    ? `$${l.ytdTotal.toLocaleString('en-US', { minimumFractionDigits:0, maximumFractionDigits:0 })} in sales YTD  ·  `
-    : '';
-  document.getElementById('lpmMeta').textContent =
-    `${ytdStr}${l.deals.length} completed job${l.deals.length !== 1 ? 's' : ''} · last 12 months`;
+  // deals.length equals allTime.jobs, so quoting both read as the same number
+  // twice. First line is the year, second is everything on record.
+  const thisYearJobs = l.deals.filter(d => d.quarter != null).length;
+  const at = l.allTime || { jobs: 0, amount: 0 };
+  const sinceStr = at.firstClose
+    ? new Date(at.firstClose + 'T12:00:00').toLocaleDateString('en-US', { month:'short', year:'numeric' })
+    : null;
+  document.getElementById('lpmMeta').innerHTML =
+    `${l.year}: ${thisYearJobs} job${thisYearJobs !== 1 ? 's' : ''} · ${fmtMoneyFull(l.ytdTotal)}` +
+    (at.jobs ? `<br><span class="lpm-alltime">All time: ${at.jobs} job${at.jobs !== 1 ? 's' : ''} · ${fmtMoneyFull(at.amount)}${sinceStr ? ` · since ${sinceStr}` : ''}</span>` : '');
 
   // Same calendar-quarter breakdown as the card, so the two never disagree.
   document.getElementById('lpmTiles').innerHTML = (l.quarters || []).map(q => `

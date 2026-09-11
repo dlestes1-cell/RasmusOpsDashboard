@@ -879,7 +879,6 @@ app.get('/api/leader-stats', async (req, res) => {
 
   try {
     const now = Date.now();
-    const twelveMonthsAgo = now - 365 * 24 * 60 * 60 * 1000;
 
     let allDeals = [];
     let after = undefined;
@@ -890,22 +889,25 @@ app.get('/api/leader-stats', async (req, res) => {
     do {
       const body = {
         filterGroups: [
-          // Group A: closedate-based (catches deals explicitly closed in the window)
+          // Group A: closedate-based (catches deals explicitly closed)
           {
             filters: [
-              { propertyName: 'pipeline',  operator: 'EQ',  value: PIPELINE },
-              { propertyName: 'closedate', operator: 'GTE', value: String(twelveMonthsAgo) },
-              { propertyName: 'closedate', operator: 'LT',  value: String(now) }
+              { propertyName: 'pipeline',       operator: 'EQ',  value: PIPELINE },
+              { propertyName: 'closedate',      operator: 'LT',  value: String(now) },
+              // Only leader-attributed deals are kept below anyway, and asking
+              // HubSpot for them cuts this from ~2,300 rows (24 pages, mostly
+              // the legacy Podio archive) to ~245.
+              { propertyName: 'project_leader', operator: 'HAS_PROPERTY' }
             ]
           },
           // Group B: stage-excluded (catches closed/won deals regardless of closedate)
           {
             filters: [
-              { propertyName: 'pipeline',   operator: 'EQ',     value: PIPELINE },
-              { propertyName: 'dealstage',  operator: 'NOT_IN', values: [
+              { propertyName: 'pipeline',       operator: 'EQ',     value: PIPELINE },
+              { propertyName: 'dealstage',      operator: 'NOT_IN', values: [
                 '249570210','978470732','249570211','1026748166','249570214'  // active stages
               ]},
-              { propertyName: 'createdate', operator: 'GTE', value: String(twelveMonthsAgo) }
+              { propertyName: 'project_leader', operator: 'HAS_PROPERTY' }
             ]
           }
         ],
@@ -949,6 +951,10 @@ app.get('/api/leader-stats', async (req, res) => {
       name, m3: 0, m6: 0, m9: 0, m12: 0, ytdTotal: 0,
       year: statsYear,
       quarters: QUARTERS.map(q => ({ ...q, amount: 0, jobs: 0 })),
+      // Every job this leader has on record, not just the current year. The
+      // legacy "Archived Podio" stage is deliberately out of scope: those
+      // 2,065 rows carry no project_leader, so they cannot be attributed.
+      allTime: { jobs: 0, amount: 0, firstClose: null, lastClose: null },
       deals: []
     });
 
@@ -1001,6 +1007,15 @@ app.get('/api/leader-stats', async (req, res) => {
         bucket.jobs++;
         if (amount) bucket.amount += amount;
       }
+      const at = leaderMap[leaderName].allTime;
+      at.jobs++;
+      if (amount) at.amount += amount;
+      const dayKey = (p.closedate || p.createdate || '').split('T')[0] || null;
+      if (dayKey) {
+        if (!at.firstClose || dayKey < at.firstClose) at.firstClose = dayKey;
+        if (!at.lastClose  || dayKey > at.lastClose)  at.lastClose  = dayKey;
+      }
+
       if (amount && closedMs >= ytdStart) leaderMap[leaderName].ytdTotal += amount;
 
       leaderMap[leaderName].deals.push({
@@ -1020,11 +1035,22 @@ app.get('/api/leader-stats', async (req, res) => {
       l.deals.sort((a, b) => (b.closeDate || '').localeCompare(a.closeDate || ''));
     });
 
+    // Filter on all-time work rather than the last 12 months, so a leader with
+    // history but a quiet year is still listed. Order is unchanged (m12 desc).
     const leaders = Object.values(leaderMap)
-      .filter(l => l.m12 > 0)
+      .filter(l => l.allTime.jobs > 0)
       .sort((a, b) => b.m12 - a.m12);
 
-    res.json({ asOf: new Date().toISOString(), total: allDeals.length, leaders });
+    // Company roll-up across the leaders above — the same population, so it
+    // never disagrees with the sum of the cards.
+    const allTime = leaders.reduce((acc, l) => {
+      acc.jobs   += l.allTime.jobs;
+      acc.amount += l.allTime.amount;
+      if (l.allTime.firstClose && (!acc.since || l.allTime.firstClose < acc.since)) acc.since = l.allTime.firstClose;
+      return acc;
+    }, { jobs: 0, amount: 0, since: null });
+
+    res.json({ asOf: new Date().toISOString(), total: allDeals.length, year: statsYear, allTime, leaders });
   } catch (e) {
     console.error('[LEADER-STATS] Error:', e.message);
     res.status(500).json({ error: e.message });
