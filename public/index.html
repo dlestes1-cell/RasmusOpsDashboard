@@ -640,9 +640,20 @@
   .lp-modal-tiles { display:flex; gap:0; border-bottom:1px solid var(--border); flex-shrink:0; }
   .lp-modal-tile { flex:1; padding:16px 20px; text-align:center; border-right:1px solid var(--border); }
   .lp-modal-tile:last-child { border-right:none; }
-  .lp-modal-tile-val { font-family:var(--mono); font-size:28px; font-weight:600; color:var(--gold); line-height:1; margin-bottom:5px; font-variant-numeric:tabular-nums; }
+  .lp-modal-tile-val { font-family:var(--mono); font-size:22px; font-weight:600; color:var(--gold); line-height:1; margin-bottom:5px; font-variant-numeric:tabular-nums; }
   .lp-modal-tile-val.zero { color:var(--text-dim); }
-  .lp-modal-tile-label { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-dim); }
+  .lp-modal-tile-label { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dim); white-space:nowrap; }
+  .lp-modal-tile-sub   { font-family:var(--mono); font-size:8px; color:var(--text-dim); opacity:.75; margin-top:3px; }
+
+  /* Quarter separator rows inside the full-view job table. */
+  .lp-modal-qrow td {
+    position:sticky; top:0; z-index:1;
+    background:var(--surface3); border-top:1px solid var(--border); border-bottom:1px solid var(--border);
+    padding:8px 14px !important;
+  }
+  .lp-modal-qname  { font-family:var(--mono); font-size:10px; color:var(--text); text-transform:uppercase; letter-spacing:0.1em; }
+  .lp-modal-qcount { font-family:var(--mono); font-size:9px; color:var(--text-dim); margin-left:10px; }
+  .lp-modal-qtotal { float:right; font-family:var(--mono); font-size:11px; font-weight:600; color:var(--green); font-variant-numeric:tabular-nums; }
   .lp-modal-body { flex:1; overflow-y:auto; overflow-x:auto; }
   .lp-modal-body::-webkit-scrollbar { width:4px; height:4px; }
   .lp-modal-body::-webkit-scrollbar-thumb { background:var(--border); }
@@ -1992,15 +2003,12 @@ function openLeaderProfile(idx) {
   document.getElementById('lpmMeta').textContent =
     `${ytdStr}${l.deals.length} completed job${l.deals.length !== 1 ? 's' : ''} · last 12 months`;
 
-  document.getElementById('lpmTiles').innerHTML = [
-    { val: l.m3,  label: '3 mo'  },
-    { val: l.m6,  label: '6 mo'  },
-    { val: l.m9,  label: '9 mo'  },
-    { val: l.m12, label: '12 mo' }
-  ].map(t => `
-    <div class="lp-modal-tile">
-      <div class="lp-modal-tile-val${t.val === 0 ? ' zero' : ''}">${t.val}</div>
-      <div class="lp-modal-tile-label">${t.label}</div>
+  // Same calendar-quarter breakdown as the card, so the two never disagree.
+  document.getElementById('lpmTiles').innerHTML = (l.quarters || []).map(q => `
+    <div class="lp-modal-tile" title="${q.label} ${q.months} — ${fmtMoneyFull(q.amount)} across ${q.jobs} job${q.jobs !== 1 ? 's' : ''}">
+      <div class="lp-modal-tile-val${q.amount === 0 ? ' zero' : ''}">${fmtMoneyCompact(q.amount)}</div>
+      <div class="lp-modal-tile-label">${q.label} ${q.months}</div>
+      <div class="lp-modal-tile-sub">${q.jobs} job${q.jobs !== 1 ? 's' : ''}</div>
     </div>`).join('');
 
   const hasAmount   = l.deals.some(d => d.amount != null);
@@ -2008,29 +2016,49 @@ function openLeaderProfile(idx) {
   document.getElementById('lpmThead').innerHTML =
     `<th>#</th><th>Job Name</th><th>Closed</th>${hasAmount ? '<th>Sale Total</th>' : ''}${hasBidCount ? '<th>Bids</th>' : ''}<th></th>`;
 
-  document.getElementById('lpmBody').innerHTML = l.deals.map((d, i) => {
+  // Column count drives the colspan on the quarter separator rows.
+  const cols = 4 + (hasAmount ? 1 : 0) + (hasBidCount ? 1 : 0);
+
+  const dealRow = (d, i) => {
     const dateStr = d.closeDate
       ? new Date(d.closeDate + 'T12:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })
       : '—';
     const amtCell = hasAmount
-      ? (d.amount != null
-          ? `<td class="lp-modal-amt">$${d.amount.toLocaleString('en-US', { minimumFractionDigits:0, maximumFractionDigits:0 })}</td>`
-          : `<td class="lp-modal-amt none">—</td>`)
+      ? `<td class="lp-modal-amt${d.amount == null ? ' none' : ''}">${d.amount != null ? fmtMoneyFull(d.amount) : '—'}</td>`
       : '';
     const bidCell = hasBidCount
-      ? (d.bidCount != null
-          ? `<td class="lp-modal-amt" style="color:var(--blue)">${d.bidCount.toLocaleString()}</td>`
-          : `<td class="lp-modal-amt none">—</td>`)
+      ? `<td class="lp-modal-amt${d.bidCount == null ? ' none' : ''}" ${d.bidCount != null ? 'style="color:var(--blue)"' : ''}>${d.bidCount != null ? d.bidCount.toLocaleString() : '—'}</td>`
       : '';
     return `<tr>
       <td class="lp-modal-num">${esc(d.jobNumber || String(i + 1))}</td>
       <td class="lp-modal-jobname">${esc(d.name)}</td>
       <td class="lp-modal-date">${dateStr}</td>
-      ${amtCell}
-      ${bidCell}
+      ${amtCell}${bidCell}
       <td><a class="lp-modal-hslink" href="${d.hubspotUrl}" target="_blank" rel="noopener">↗ HubSpot</a></td>
     </tr>`;
-  }).join('');
+  };
+
+  // Newest quarter first, then anything from before the stats year, so the
+  // table accounts for every deal the header's job count claims.
+  const groups = (l.quarters || []).slice().reverse()
+    .map(q => ({ key: `${q.label} ${q.months}`, total: q.amount, rows: l.deals.filter(d => d.quarter === q.q) }))
+    .filter(g => g.rows.length);
+  const earlier = l.deals.filter(d => d.quarter == null);
+  if (earlier.length) groups.push({
+    key: `Earlier (before ${l.year})`,
+    total: earlier.reduce((a, d) => a + (d.amount || 0), 0),
+    rows: earlier
+  });
+
+  document.getElementById('lpmBody').innerHTML = groups.map(g => `
+    <tr class="lp-modal-qrow">
+      <td colspan="${cols}">
+        <span class="lp-modal-qname">${esc(g.key)}</span>
+        <span class="lp-modal-qcount">${g.rows.length} job${g.rows.length !== 1 ? 's' : ''}</span>
+        <span class="lp-modal-qtotal">${fmtMoneyFull(g.total)}</span>
+      </td>
+    </tr>
+    ${g.rows.map(dealRow).join('')}`).join('');
 
   document.getElementById('leaderProfileModal').classList.add('open');
   document.body.style.overflow = 'hidden';
