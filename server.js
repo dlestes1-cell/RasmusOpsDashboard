@@ -935,7 +935,22 @@ app.get('/api/leader-stats', async (req, res) => {
       m9:  now - 9  * 30 * 24 * 60 * 60 * 1000,
       m12: now - 12 * 30 * 24 * 60 * 60 * 1000
     };
-    const ytdStart = new Date(new Date().getFullYear(), 0, 1).getTime();
+    const statsYear = new Date().getFullYear();
+    const ytdStart  = new Date(statsYear, 0, 1).getTime();
+    // Calendar quarters of the current year. Q4 is normally partly or wholly in
+    // the future and simply comes back at 0 until those deals close.
+    const QUARTERS = [
+      { q: 1, label: 'Q1', months: 'Jan–Mar' },
+      { q: 2, label: 'Q2', months: 'Apr–Jun' },
+      { q: 3, label: 'Q3', months: 'Jul–Sep' },
+      { q: 4, label: 'Q4', months: 'Oct–Dec' }
+    ];
+    const newLeader = name => ({
+      name, m3: 0, m6: 0, m9: 0, m12: 0, ytdTotal: 0,
+      year: statsYear,
+      quarters: QUARTERS.map(q => ({ ...q, amount: 0, jobs: 0 })),
+      deals: []
+    });
 
     const leaderMap = {};
     allDeals.forEach(deal => {
@@ -952,7 +967,7 @@ app.get('/api/leader-stats', async (req, res) => {
       const closedMs = dateStr ? new Date(dateStr).getTime() : null;
       if (!closedMs) return;
 
-      if (!leaderMap[leaderName]) leaderMap[leaderName] = { name: leaderName, m3: 0, m6: 0, m9: 0, m12: 0, ytdTotal: 0, deals: [] };
+      if (!leaderMap[leaderName]) leaderMap[leaderName] = newLeader(leaderName);
       if (closedMs >= cutoffs.m3)  leaderMap[leaderName].m3++;
       if (closedMs >= cutoffs.m6)  leaderMap[leaderName].m6++;
       if (closedMs >= cutoffs.m9)  leaderMap[leaderName].m9++;
@@ -974,6 +989,18 @@ app.get('/api/leader-stats', async (req, res) => {
         ? parseFloat(rawAmt)
         : (statsBidAmt && statsBidAmt > 0 ? statsBidAmt : null);
 
+      // Quarter is by calendar year, so the four buckets sum to the year total.
+      // Deals outside this year (the fetch reaches 12 months back) get null and
+      // are excluded from both the quarter rows and the year total.
+      const closedDate = new Date(closedMs);
+      const quarter = closedDate.getFullYear() === statsYear
+        ? Math.floor(closedDate.getMonth() / 3) + 1
+        : null;
+      if (quarter) {
+        const bucket = leaderMap[leaderName].quarters[quarter - 1];
+        bucket.jobs++;
+        if (amount) bucket.amount += amount;
+      }
       if (amount && closedMs >= ytdStart) leaderMap[leaderName].ytdTotal += amount;
 
       leaderMap[leaderName].deals.push({
@@ -981,6 +1008,7 @@ app.get('/api/leader-stats', async (req, res) => {
         jobNumber,
         name:       jobName,
         closeDate,
+        quarter,
         amount,
         bidCount,
         hubspotUrl: `https://app.hubspot.com/contacts/46444696/record/0-3/${deal.id}`

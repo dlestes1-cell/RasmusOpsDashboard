@@ -583,7 +583,7 @@
      the definite-height grid compresses rows to fit, so .fs-card (overflow:hidden)
      clips its own content and .fs-body never overflows enough to scroll — cards
      squashed to 34px on a phone, and an expanded .fs-deals table cut off. */
-  .fs-body   { flex:1; overflow-y:auto; padding:20px 24px; display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); grid-auto-rows:max-content; gap:14px; align-content:start; }
+  .fs-body   { flex:1; overflow-y:auto; padding:20px 24px; display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); grid-auto-rows:max-content; gap:14px; align-content:start; }
   .fs-body::-webkit-scrollbar { width:3px; }
   .fs-body::-webkit-scrollbar-thumb { background:var(--border); }
   .fs-loading { grid-column:1/-1; padding:40px 0; text-align:center; font-family:var(--mono); font-size:11px; color:var(--text-dim); letter-spacing:0.06em; }
@@ -592,16 +592,30 @@
   .fs-card-hdr { padding:12px 16px; border-bottom:1px solid var(--border); background:var(--surface); }
   .fs-card-name { font-family:var(--serif); font-size:13px; color:var(--text); }
   .fs-tiles  { display:grid; grid-template-columns:repeat(4,1fr); }
-  .fs-tile   { padding:14px 8px 12px; text-align:center; border-right:1px solid var(--border); }
+  .fs-tile   { padding:12px 6px 10px; text-align:center; border-right:1px solid var(--border); min-width:0; }
   .fs-tile:last-child { border-right:none; }
-  .fs-tile-val { font-family:var(--mono); font-size:22px; font-weight:600; color:var(--gold); line-height:1; margin-bottom:5px; }
+  .fs-tile-val { font-family:var(--mono); font-size:17px; font-weight:600; color:var(--gold); line-height:1; margin-bottom:5px; font-variant-numeric:tabular-nums; }
   .fs-tile-val.zero { color:var(--text-dim); }
-  .fs-tile-label { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.1em; color:var(--text-dim); }
+  .fs-tile-label { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dim); white-space:nowrap; }
+  .fs-tile-sub   { font-family:var(--mono); font-size:8px; color:var(--text-dim); opacity:.75; margin-top:2px; }
+  .fs-ytd-year   { font-size:9px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em; font-weight:400; }
+
+  /* One block per calendar quarter inside the expanded panel. */
+  .fs-q-group { border-bottom:1px solid var(--border); }
+  .fs-q-group:last-child { border-bottom:none; }
+  .fs-q-hdr {
+    position:sticky; top:0; z-index:1; display:flex; align-items:center; gap:10px;
+    padding:7px 14px; background:var(--surface3); border-bottom:1px solid var(--border);
+  }
+  .fs-q-name  { font-family:var(--mono); font-size:10px; color:var(--text); text-transform:uppercase; letter-spacing:0.1em; }
+  .fs-q-count { font-family:var(--mono); font-size:9px; color:var(--text-dim); }
+  .fs-q-total { margin-left:auto; font-family:var(--mono); font-size:11px; font-weight:600; color:var(--green); font-variant-numeric:tabular-nums; }
+  .fs-q-empty { padding:20px 14px; font-family:var(--mono); font-size:11px; color:var(--text-dim); text-align:center; }
   .fs-card-toggle { width:100%; background:none; border:none; border-top:1px solid var(--border); color:var(--text-dim); font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.1em; padding:7px 16px; cursor:pointer; display:flex; align-items:center; gap:6px; transition:background 0.15s,color 0.15s; }
   .fs-card-toggle:hover { background:var(--surface3); color:var(--text-mid); }
   .fs-card-toggle .toggle-arrow { transition:transform 0.2s; display:inline-block; }
   .fs-card-toggle.open .toggle-arrow { transform:rotate(90deg); }
-  .fs-deals { display:none; border-top:1px solid var(--border); max-height:260px; overflow-y:auto; overflow-x:auto; }
+  .fs-deals { display:none; border-top:1px solid var(--border); max-height:340px; overflow-y:auto; overflow-x:auto; }
   .fs-deals.open { display:block; }
   .fs-deal-table { width:100%; border-collapse:collapse; min-width:420px; }
   .fs-deal-table th { padding:6px 14px; font-family:var(--mono); font-size:8px; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-dim); text-align:left; border-bottom:1px solid var(--border); background:var(--bg); white-space:nowrap; }
@@ -610,6 +624,7 @@
   .fs-deal-table tr:hover td { background:var(--surface3); }
   .fs-deal-job  { font-family:var(--mono); font-size:10px; color:var(--text-dim); white-space:nowrap; }
   .fs-deal-name { color:var(--text); }
+  .fs-q-group .fs-deal-name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:190px; }
   .fs-deal-date { font-family:var(--mono); font-size:10px; color:var(--text-mid); white-space:nowrap; }
   .fs-deal-amt  { font-family:var(--mono); font-size:11px; color:var(--green); font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:600; }
   .fs-deal-link { color:var(--text-dim); text-decoration:none; font-family:var(--mono); font-size:9px; opacity:0.6; }
@@ -1868,52 +1883,23 @@ function renderFieldStats(data) {
   }
 
   list.innerHTML = leaders.map((l, i) => {
-    const tiles = [
-      { val: l.m3,  label: '3 mo'  },
-      { val: l.m6,  label: '6 mo'  },
-      { val: l.m9,  label: '9 mo'  },
-      { val: l.m12, label: '12 mo' }
-    ].map(t => `
-      <div class="fs-tile">
-        <div class="fs-tile-val${t.val === 0 ? ' zero' : ''}">${t.val}</div>
-        <div class="fs-tile-label">${t.label}</div>
+    const quarters = l.quarters || [];
+    const tiles = quarters.map(q => `
+      <div class="fs-tile" title="${q.label} ${q.months} — ${fmtMoneyFull(q.amount)} across ${q.jobs} job${q.jobs !== 1 ? 's' : ''}">
+        <div class="fs-tile-val${q.amount === 0 ? ' zero' : ''}">${fmtMoneyCompact(q.amount)}</div>
+        <div class="fs-tile-label">${q.label} ${q.months}</div>
+        <div class="fs-tile-sub">${q.jobs} job${q.jobs !== 1 ? 's' : ''}</div>
       </div>`).join('');
 
     const hasAmount   = (l.deals || []).some(d => d.amount);
     const hasBidCount = (l.deals || []).some(d => d.bidCount != null);
-    const dealRows = (l.deals || []).map(d => {
-      const dateStr = d.closeDate
-        ? new Date(d.closeDate + 'T12:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })
-        : '—';
-      const amtCell = hasAmount
-        ? (d.amount != null
-            ? `<td class="fs-deal-amt">$${d.amount.toLocaleString('en-US', { minimumFractionDigits:0, maximumFractionDigits:0 })}</td>`
-            : `<td class="fs-deal-date">—</td>`)
-        : '';
-      const bidCell = hasBidCount
-        ? (d.bidCount != null
-            ? `<td class="fs-deal-amt" style="color:var(--blue)">${d.bidCount.toLocaleString()}</td>`
-            : `<td class="fs-deal-date">—</td>`)
-        : '';
-      return `<tr>
-        <td class="fs-deal-job">${esc(d.jobNumber || '—')}</td>
-        <td class="fs-deal-name">${esc(d.name)}</td>
-        <td class="fs-deal-date">${dateStr}</td>
-        ${amtCell}
-        ${bidCell}
-        <td><a class="fs-deal-link" href="${d.hubspotUrl}" target="_blank" rel="noopener">↗ HS</a></td>
-      </tr>`;
-    }).join('');
-
-    const amtHeader = hasAmount   ? '<th>Sale Total</th>' : '';
-    const bidHeader = hasBidCount ? '<th>Bids</th>'       : '';
 
     return `
       <div class="fs-card">
         <div class="fs-card-hdr fs-card-hdr-btn" onclick="openLeaderProfile(${i})" title="Expand full view">
           <div class="fs-card-name">${esc(l.name)}</div>
           <div class="fs-card-hdr-right">
-            ${l.ytdTotal > 0 ? `<div class="fs-ytd-badge">$${l.ytdTotal.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})} YTD</div>` : ''}
+            ${l.ytdTotal > 0 ? `<div class="fs-ytd-badge" title="Sum of the four quarters below">${fmtMoneyFull(l.ytdTotal)} <span class="fs-ytd-year">${l.year} total</span></div>` : ''}
             <div class="fs-card-hdr-expand">⤢ full view</div>
           </div>
         </div>
@@ -1922,13 +1908,68 @@ function renderFieldStats(data) {
           <span class="toggle-arrow">▶</span> ${l.deals.length} job${l.deals.length !== 1 ? 's' : ''}
         </button>
         <div class="fs-deals" id="fs-deals-${i}">
-          <table class="fs-deal-table">
-            <thead><tr><th>Job #</th><th>Name</th><th>Closed</th>${amtHeader}${bidHeader}<th></th></tr></thead>
-            <tbody>${dealRows}</tbody>
-          </table>
+          ${fsQuarterGroups(l, hasAmount, hasBidCount)}
         </div>
       </div>`;
   }).join('');
+}
+
+// One table per quarter, newest first, each with its own subtotal. Deals that
+// fall outside the stats year (the fetch reaches 12 months back) are kept in a
+// trailing "Earlier" group rather than dropped.
+function fsDealRow(d, hasAmount, hasBidCount) {
+  const dateStr = d.closeDate
+    ? new Date(d.closeDate + 'T12:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric' })
+    : '—';
+  const amtCell = hasAmount
+    ? `<td class="${d.amount != null ? 'fs-deal-amt' : 'fs-deal-date'}">${d.amount != null ? fmtMoneyFull(d.amount) : '—'}</td>`
+    : '';
+  const bidCell = hasBidCount
+    ? `<td class="${d.bidCount != null ? 'fs-deal-amt' : 'fs-deal-date'}" ${d.bidCount != null ? 'style="color:var(--blue)"' : ''}>${d.bidCount != null ? d.bidCount.toLocaleString() : '—'}</td>`
+    : '';
+  return `<tr>
+    <td class="fs-deal-job">${esc(d.jobNumber || '—')}</td>
+    <td class="fs-deal-name">${esc(d.name)}</td>
+    <td class="fs-deal-date">${dateStr}</td>
+    ${amtCell}${bidCell}
+    <td><a class="fs-deal-link" href="${d.hubspotUrl}" target="_blank" rel="noopener">↗ HS</a></td>
+  </tr>`;
+}
+
+function fsQuarterGroups(l, hasAmount, hasBidCount) {
+  const deals = l.deals || [];
+  const amtHeader = hasAmount   ? '<th>Sale Total</th>' : '';
+  const bidHeader = hasBidCount ? '<th>Bids</th>'       : '';
+  const head = `<thead><tr><th>Job #</th><th>Name</th><th>Closed</th>${amtHeader}${bidHeader}<th></th></tr></thead>`;
+
+  const groups = (l.quarters || []).slice().reverse()
+    .map(q => ({
+      key:   `${q.label} ${q.months}`,
+      total: q.amount,
+      rows:  deals.filter(d => d.quarter === q.q)
+    }))
+    .filter(g => g.rows.length);
+
+  const earlier = deals.filter(d => d.quarter == null);
+  if (earlier.length) groups.push({
+    key: `Earlier (before ${l.year})`,
+    total: earlier.reduce((a, d) => a + (d.amount || 0), 0),
+    rows: earlier
+  });
+
+  if (!groups.length) return `<div class="fs-q-empty">No completed jobs recorded.</div>`;
+
+  return groups.map(g => `
+    <div class="fs-q-group">
+      <div class="fs-q-hdr">
+        <span class="fs-q-name">${esc(g.key)}</span>
+        <span class="fs-q-count">${g.rows.length} job${g.rows.length !== 1 ? 's' : ''}</span>
+        <span class="fs-q-total">${fmtMoneyFull(g.total)}</span>
+      </div>
+      <table class="fs-deal-table">${head}
+        <tbody>${g.rows.map(d => fsDealRow(d, hasAmount, hasBidCount)).join('')}</tbody>
+      </table>
+    </div>`).join('');
 }
 
 function toggleFsDeals(btn, id) {
@@ -2278,6 +2319,19 @@ function fmtDateShort(iso) {
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const year = +y === new Date().getFullYear() ? '' : `, ${y}`;
   return `${months[+m-1]} ${+d}${year}`;
+}
+
+// Exact for totals a leader may need to quote; compact inside the narrow
+// quarter tiles, where $1,719,916 cannot fit at a readable size.
+function fmtMoneyFull(v) {
+  if (v == null) return '—';
+  return '$' + Math.round(v).toLocaleString('en-US');
+}
+function fmtMoneyCompact(v) {
+  if (!v) return '$0';
+  if (v >= 1e6) return '$' + (v / 1e6).toFixed(v >= 10e6 ? 0 : 2) + 'M';
+  if (v >= 1e3) return '$' + Math.round(v / 1e3) + 'K';
+  return '$' + Math.round(v);
 }
 
 function localDateKey(date = new Date()) {
