@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Rasmus Auctions — Field Operations</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230e0d0b'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' font-weight='bold' fill='%23c8a84b' text-anchor='middle'%3ER%3C/text%3E%3C/svg%3E" />
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -686,6 +687,14 @@
   }
   .hs-link:hover { color: var(--gold); }
 
+  /* Shown above the job list when a refresh failed but earlier data is still
+     on screen, so the list is never silently stale. */
+  .hs-stale {
+    background:rgba(196,98,45,0.12); border:1px solid rgba(196,98,45,0.35);
+    color:var(--red); font-family:var(--mono); font-size:10px;
+    padding:8px 12px; margin-bottom:10px; line-height:1.5;
+  }
+
   /* Labelled variant, for rows and cards with room for more than the glyph. */
   .hs-btn {
     display:inline-flex; align-items:center; gap:4px; flex-shrink:0;
@@ -939,6 +948,7 @@ body.viewer-mode .form-card { display: none !important; }
           <button class="btn-primary" onclick="submitProject()">Add Project</button>
         </div>
       </div>
+      <div id="syncWarning"></div>
       <div id="projectList"></div>
     </div>
   </div>
@@ -1288,6 +1298,7 @@ function render() {
   renderStats();
   renderAlerts();
   renderAuctionStrip();
+  renderSyncWarning();
   if (hubspotProjects.total) renderHubspotProjects();
   else renderProjects();
   renderPending();
@@ -1298,6 +1309,17 @@ function render() {
     const p = (state.projects||[]).find(x => x.id === drawerProjectId);
     if (p) renderDrawerLog(p);
   }
+}
+
+// The warning lives outside #projectList because either renderHubspotProjects()
+// or renderProjects() may own that element on any given pass, and each rewrites
+// it wholesale — a banner inside it was erased by the next state broadcast.
+function renderSyncWarning() {
+  const el = document.getElementById('syncWarning');
+  if (!el) return;
+  el.innerHTML = hubspotError
+    ? `<div class="hs-stale">⚠ HubSpot sync failed (${esc(hubspotError)}). Any jobs below are from the last successful sync and may be out of date — this is not an empty schedule. <a href="#" onclick="loadHubspotProjects();return false;" style="color:var(--gold);text-decoration:none">↻ Retry</a></div>`
+    : '';
 }
 
 function renderStats() {
@@ -2360,16 +2382,36 @@ async function submitDrawerLog() {
 
 // ── HubSpot Active Projects ───────────────────────────────────
 let hubspotProjects = { groups: [], total: 0, asOf: null };
+// Set when the last sync fetch failed. Kept separate from the data so a
+// failure never overwrites the jobs already on screen.
+let hubspotError = null;
 
 async function loadHubspotProjects() {
   try {
-    const res  = await fetch('/api/hubspot-active-projects');
+    const res = await fetch('/api/hubspot-active-projects');
+    // Without this an error body ({error: "..."}) was assigned as the project
+    // data. It has no groups, so the page rendered "No active projects found
+    // in HubSpot" and zeroed the stats — an outage read as "no work today",
+    // which is the most dangerous way this page can be wrong.
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try { const body = await res.json(); if (body && body.error) detail = body.error; } catch {}
+      throw new Error(detail);
+    }
     const data = await res.json();
+    if (!data || !Array.isArray(data.groups)) throw new Error('Unexpected response from the sync endpoint');
     hubspotProjects = data;
+    hubspotError = null;
+    renderSyncWarning();
     renderHubspotProjects();
     updateHubspotStats();
   } catch (e) {
+    // Keep whatever was last loaded on screen and say the sync failed. Stats
+    // are deliberately not touched, so they keep showing the last good counts.
+    hubspotError = e.message || 'Unknown error';
     console.error('[HUBSPOT] Failed to load active projects:', e);
+    renderSyncWarning();
+    renderHubspotProjects();
   }
 }
 
@@ -2402,13 +2444,26 @@ function renderHubspotProjects() {
   const el = document.getElementById('projectList');
   if (!el) return;
 
+  const retry = `<a href="#" onclick="loadHubspotProjects();return false;" style="color:var(--gold);text-decoration:none">↻ Retry</a>`;
+
+  // Nothing loaded and the fetch failed: say so plainly. This is NOT the same
+  // as HubSpot having no active jobs, and must not look like it.
+  if (hubspotError && (!hubspotProjects.groups || !hubspotProjects.groups.length)) {
+    el.innerHTML = `<div class="empty-state">
+      <div class="icon" style="color:var(--red)">⚠</div>
+      Could not reach HubSpot — job list unavailable.<br>
+      <small style="color:var(--text-dim);font-size:11px">
+        ${esc(hubspotError)}<br>This is a sync failure, not an empty schedule. ${retry}
+      </small>
+    </div>`;
+    return;
+  }
+
   if (!hubspotProjects.groups || !hubspotProjects.groups.length) {
     el.innerHTML = `<div class="empty-state">
       <div class="icon">📋</div>
       No active projects found in HubSpot.<br>
-      <small style="color:var(--text-dim);font-size:11px">
-        <a href="#" onclick="loadHubspotProjects();return false;" style="color:var(--gold)">↻ Refresh</a>
-      </small>
+      <small style="color:var(--text-dim);font-size:11px">${retry}</small>
     </div>`;
     return;
   }
