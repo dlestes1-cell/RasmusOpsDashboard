@@ -662,6 +662,16 @@
   }
   .hs-link:hover { color: var(--gold); }
 
+  /* Labelled variant, for rows and cards with room for more than the glyph. */
+  .hs-btn {
+    display:inline-flex; align-items:center; gap:4px; flex-shrink:0;
+    background:none; border:1px solid var(--border); color:var(--text-dim);
+    font-family:var(--mono); font-size:9px; text-transform:uppercase;
+    letter-spacing:0.08em; padding:4px 9px; text-decoration:none;
+    white-space:nowrap; transition:all 0.15s;
+  }
+  .hs-btn:hover { border-color:var(--gold); color:var(--gold); }
+
   .hs-job-summary {
     font-size: 11px; color: var(--text-mid);
     line-height: 1.45; margin-top: 2px;
@@ -1380,6 +1390,7 @@ function renderProjects() {
       <span class="pr-date">${fmtDateShort(proj.date)}</span>
       <div class="pr-actions" onclick="event.stopPropagation()">
         <button class="ai-btn" onclick="aiSummary('${proj.id}')">✦</button>
+        ${hsIcon(proj.hubspotId)}
       </div>
     </div>`).join('');
     return;
@@ -1404,7 +1415,10 @@ function renderProjects() {
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
       <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim)">${proj.date ? fmtDateShort(proj.date) : 'No date'}</span>
-      <button class="ai-btn" style="padding:3px 8px;font-size:9px" onclick="event.stopPropagation();aiSummary('${proj.id}')" title="${proj.summaryText ? 'Refresh summary' : 'Generate summary'}">✦</button>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button class="ai-btn" style="padding:3px 8px;font-size:9px" onclick="event.stopPropagation();aiSummary('${proj.id}')" title="${proj.summaryText ? 'Refresh summary' : 'Generate summary'}">✦</button>
+        ${hsIcon(proj.hubspotId)}
+      </div>
     </div>
   </div>`; }).join('');
 }
@@ -1435,12 +1449,11 @@ function renderPending() {
     } else {
       statusHtml = `<span class="status-badge on-track">ID Received</span>`;
     }
-    const hsUrl = e.hubspotId
-      ? `https://app.hubspot.com/contacts/46444696/record/0-3/${e.hubspotId}`
-      : null;
-    const jobCell = jobNum
-      ? `${esc(jobNum)}${hsUrl ? ` <a href="${hsUrl}" target="_blank" class="hs-link" title="Open in HubSpot">↗</a>` : ''}`
-      : '—';
+    // Same link as everywhere else — built by the shared helper rather than
+    // repeating the portal id and object type here.
+    // Link whenever the job has a CRM record, even when no job number could be
+    // parsed out of the site string — the record is still reachable.
+    const jobCell = [jobNum ? esc(jobNum) : '', hsIcon(e.hubspotId)].filter(Boolean).join(' ') || '—';
     return `<tr id="ec-${e.id}">
       <td class="pj-job">${jobCell}</td>
       <td class="pj-name">${esc(siteName)}</td>
@@ -1939,6 +1952,7 @@ function renderEmailTracking() {
       <td class="et-actions">
         ${!e.sent ? `<button class="draft-btn" onclick="etDraftEmail('${e.id}')">✦ Draft</button>` : ''}
         ${!e.sent ? `<button class="et-sent-btn" style="${isOver ? 'background:var(--red)' : ''}" onclick="markEmailSent('${e.id}')">✓ Mark Sent</button>` : ''}
+        ${hsButton(e.hubspotId)}
         <button class="et-dismiss-btn" onclick="dismissEmailEntry('${e.id}')">✕</button>
       </td>
     </tr>`;
@@ -2196,6 +2210,7 @@ function lpCard(p, today) {
         </div>
       </div>
       <div class="lp-card-actions">
+        ${hsButton(p.hubspotId)}
         <button class="ai-btn" onclick="openEditLeader('${p.id}')">✎ Edit</button>
         <button class="del-btn" onclick="deleteLeaderProject('${p.id}')">✕ Remove</button>
       </div>
@@ -2225,6 +2240,23 @@ function esc(s) {
     .replace(/'/g, '&#39;');
 }
 function statusLabel(s) { return {'identification':'Identification','selling-online':'Selling Online','removal':'Removal','complete':'Complete'}[s]||s; }
+
+// ── HubSpot deep links ────────────────────────────────────────
+// Deals live on portal 46444696 as object type 0-3. Built in one place so a
+// job resolves to the same record everywhere it appears.
+const HUBSPOT_PORTAL = '46444696';
+function hubspotDealUrl(id) {
+  return id ? `https://app.hubspot.com/contacts/${HUBSPOT_PORTAL}/record/0-3/${encodeURIComponent(id)}` : '';
+}
+// Returns '' for a job with no HubSpot record, so nothing renders a dead
+// button. stopPropagation because most job rows and cards open the drawer
+// on click — following the link should not also open it.
+function hsButton(id, label = '↗ HubSpot', cls = 'hs-btn') {
+  const url = hubspotDealUrl(id);
+  if (!url) return '';
+  return `<a href="${url}" target="_blank" rel="noopener" class="${cls}" title="Open this job in HubSpot" onclick="event.stopPropagation()">${label}</a>`;
+}
+function hsIcon(id) { return hsButton(id, '↗', 'hs-link'); }
 function fmtCurrency(v) { const n = parseFloat(v); if (!v || isNaN(n)) return ''; return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
 function fmtDate(ts) { return new Date(ts).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }
 function emptyState(icon, msg) { return `<div class="empty-state"><div class="icon">${icon}</div>${msg}<br><span style="opacity:.6">Use the button above to add one.</span></div>`; }
@@ -2246,6 +2278,7 @@ function openJobDrawer(projectId) {
   document.getElementById('drawerJobTitle').textContent = p.jobNumber ? `${p.jobNumber} — ${p.name}` : p.name;
   document.getElementById('drawerJobSub').textContent   = [p.stage, p.date ? '📅 ' + fmtDateShort(p.date) : ''].filter(Boolean).join('  ·  ');
   document.getElementById('drawerStatus').innerHTML     = `<span class="status-badge ${p.status}">${statusLabel(p.status)}</span>`;
+  document.getElementById('drawerHubspot').innerHTML   = hsButton(p.hubspotId, '↗ Open in HubSpot');
   document.getElementById('drawerValuation').textContent = fmtCurrency(p.amount) || '—';
   document.getElementById('drawerNotes').textContent    = p.notes || '—';
   document.getElementById('drawerAISummary').textContent = p.summaryText || '—';
@@ -2432,6 +2465,7 @@ setInterval(loadHubspotProjects, 5 * 60 * 1000);
     <div>
       <div class="drawer-title" id="drawerJobTitle"></div>
       <div class="drawer-sub"   id="drawerJobSub"></div>
+      <div id="drawerHubspot" style="margin-top:8px"></div>
     </div>
     <button class="drawer-close" onclick="closeJobDrawer()">✕</button>
   </div>
