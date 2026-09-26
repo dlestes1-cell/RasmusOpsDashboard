@@ -6,6 +6,7 @@ jest.mock('../tasks/gmail', () => ({
   getAccessToken: jest.fn().mockResolvedValue('mock-token'),
   searchMessages: jest.fn().mockResolvedValue([]),
   sendEmail: jest.fn().mockResolvedValue(true),
+  getMessageMetadata: jest.fn().mockResolvedValue(null),
 }));
 
 // Stable wrapper functions so scheduler.js destructuring captures these references,
@@ -336,5 +337,37 @@ describe('classifySubject', () => {
 
   test('does not match "id" inside an unrelated word', () => {
     expect(classifySubject('Post identifier list')).toBeNull();
+  });
+});
+
+// ── runEmailGmailScan ─────────────────────────────────────────────
+
+describe('runEmailGmailScan', () => {
+  const { runEmailGmailScan } = require('../tasks/scheduler');
+  const gmail = require('../tasks/gmail');
+  const OLD_ENV = process.env;
+  beforeEach(() => {
+    process.env = { ...OLD_ENV, GMAIL_REFRESH_TOKEN: 'rt', GMAIL_CLIENT_ID: 'cid' };
+  });
+  afterAll(() => { process.env = OLD_ENV; });
+
+  test('still scans sent mail when no leader emails loaded', async () => {
+    // Leader emails come from the HubSpot owners API; never loaded in tests
+    stateMocks.getEmailTracking.mockReturnValue([
+      { id: 'et1', type: 'identification', hubspotId: '64883166212', jobNumber: 'R260687', name: 'Common House', leader: 'Darren Estes', sent: false },
+    ]);
+    gmail.searchMessages.mockResolvedValue([{ id: 'm1' }]);
+    gmail.getMessageMetadata.mockResolvedValue({
+      subject: 'Identification Completed – R260687 | Common House | ',
+      from: 'Darren Estes <destes@rasmus.com>',
+      internalDate: 1789997612000,
+    });
+
+    await runEmailGmailScan();
+
+    expect(gmail.searchMessages).toHaveBeenCalledTimes(1);
+    expect(gmail.searchMessages.mock.calls[0][0]).toMatch(/^in:sent /);
+    expect(stateMocks.updateEmailTracking).toHaveBeenCalledWith('et1',
+      expect.objectContaining({ sent: true, sentAt: 1789997612000, autoDetected: true }));
   });
 });
