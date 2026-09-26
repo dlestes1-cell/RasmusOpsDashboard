@@ -752,8 +752,9 @@ async function runEmailGmailScan() {
   const unsent   = tracking.filter(e => !e.sent);
   if (!unsent.length) { console.log('[EMAIL-SCAN] No unsent entries — skipping'); return; }
 
+  // No leader emails (owners API failed) still leaves our own sent mail worth scanning
   const leaderEntries = Object.entries(LEADER_EMAILS);
-  if (!leaderEntries.length) { console.log('[EMAIL-SCAN] No leader emails loaded — skipping'); return; }
+  if (!leaderEntries.length) console.log('[EMAIL-SCAN] No leader emails loaded — scanning sent mail only');
 
   // Search 90 days back to catch all historical identification emails
   const ninetyAgo = (() => {
@@ -773,7 +774,7 @@ async function runEmailGmailScan() {
   const leaderQuery = `(${fromQuery}) ${subjectFilter} after:${ninetyAgo}`;
 
   const [leaderMsgs, sentMsgs] = await Promise.all([
-    gmail.searchMessages(leaderQuery, 100),
+    leaderEntries.length ? gmail.searchMessages(leaderQuery, 100) : [],
     gmail.searchMessages(sentQuery, 100)
   ]);
 
