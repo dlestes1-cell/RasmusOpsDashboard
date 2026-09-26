@@ -734,6 +734,16 @@ function runEmailTrackingCheck() {
 }
 
 // ── Gmail scan for auto-detected leader emails ────────────────
+// Which tracking type a sent subject represents, or null if it is not one of
+// ours. Substring-based on purpose: real subjects vary in punctuation, casing
+// and word ending ("Identification Completed - R260687 | Common House").
+function classifySubject(subject) {
+  const s = (subject || '').toLowerCase();
+  if (/identification\s+complet(?:e|ed|ion)/.test(s) || /post[-\s]?identification/.test(s) || /post[-\s]?id\b/.test(s)) return 'identification';
+  if (/removal\s+complet(?:e|ed|ion)/.test(s) || /post[-\s]?removal/.test(s)) return 'removal';
+  return null;
+}
+
 async function runEmailGmailScan() {
   const hasGmail = process.env.GMAIL_REFRESH_TOKEN && process.env.GMAIL_CLIENT_ID;
   if (!hasGmail) return;
@@ -753,7 +763,12 @@ async function runEmailGmailScan() {
 
   // Search leader-sent AND dashboard-sent (in:sent from destes@rasmus.com)
   const fromQuery  = leaderEntries.map(([, email]) => `from:${email}`).join(' OR ');
-  const subjectFilter = `(subject:"identification complete" OR subject:"post identification" OR subject:"post id" OR subject:"removal complete" OR subject:"post removal")`;
+  // Gmail phrase search matches whole tokens, with no stemming: subject:"identification
+  // complete" does NOT match a real subject of "Identification Completed", so the scan
+  // never fetched the very emails it exists to find. Spell the endings out and let
+  // classifySubject() below do the precise filtering on the metadata we get back.
+  const completed     = `(complete OR completed OR completion)`;
+  const subjectFilter = `(subject:(identification ${completed}) OR subject:(removal ${completed}) OR subject:"post identification" OR subject:"post id" OR subject:"post removal")`;
   const sentQuery   = `in:sent ${subjectFilter} after:${ninetyAgo}`;
   const leaderQuery = `(${fromQuery}) ${subjectFilter} after:${ninetyAgo}`;
 
@@ -773,10 +788,7 @@ async function runEmailGmailScan() {
     const meta = await gmail.getMessageMetadata(msg.id);
     if (!meta) continue;
 
-    const subjectLower = meta.subject.toLowerCase();
-    let type = null;
-    if (subjectLower.includes('identification complete') || subjectLower.includes('post identification') || subjectLower.includes('post id')) type = 'identification';
-    else if (subjectLower.includes('removal complete') || subjectLower.includes('post removal')) type = 'removal';
+    const type = classifySubject(meta.subject);
     if (!type) continue;
 
     const leaderMatch = leaderEntries.find(([, email]) => meta.from.toLowerCase().includes(email.toLowerCase()));
@@ -786,9 +798,12 @@ async function runEmailGmailScan() {
     const jnMatch = meta.subject.match(/R(\d+)/i);
     const subjectJobNum = jnMatch ? `R${jnMatch[1]}` : null;
 
-    // Strip "Identification Complete - R12345 | " prefix to isolate deal name
+    // Strip "Identification Completed - R12345 | " prefix to isolate deal name.
+    // Tolerates complete/completed/completion and en/em dashes, all of which
+    // appear in real subjects.
     const subjectDealPart = meta.subject
-      .replace(/^(identification complete|removal complete)\s*[-–|:]+\s*/i, '')
+      .replace(/^(identification|removal)\s+complet(?:e|ed|ion)\s*[-–—|:]+\s*/i, '')
+      .replace(/^(post[- ](?:identification|id|removal))\s*[-–—|:]+\s*/i, '')
       .replace(/^R\d+\s*[|:]\s*/i, '')
       .toLowerCase()
       .trim();
@@ -855,4 +870,4 @@ async function init(broadcastFn) {
   console.log('[CRON] All tasks active.');
 }
 
-module.exports = { init, runHubSpotSync, runDailyDigest, runOverdueDraft, normalizeLeader, stageToStatus, runConfirmationCheck, syncConfirmations, syncEmailTracking, runEmailTrackingCheck, runEmailGmailScan };
+module.exports = { init, classifySubject, runHubSpotSync, runDailyDigest, runOverdueDraft, normalizeLeader, stageToStatus, runConfirmationCheck, syncConfirmations, syncEmailTracking, runEmailTrackingCheck, runEmailGmailScan };

@@ -288,3 +288,53 @@ describe('runHubSpotSync alerting', () => {
       expect.objectContaining({ type: 'error', message: expect.stringContaining('unparseable') }));
   });
 });
+
+// ── classifySubject ───────────────────────────────────────────────
+// Regression: the Gmail scan searched for the phrase "identification complete"
+// and classified on the same string, so a real subject of
+// "Identification Completed - R260687 | Common House" was never matched and the
+// tracker kept showing the email as unsent.
+
+const { classifySubject } = require('../tasks/scheduler');
+
+describe('classifySubject', () => {
+  test('matches the real subject the dashboard missed', () => {
+    expect(classifySubject('Identification Completed – R260687 | Common House | '))
+      .toBe('identification');
+  });
+
+  test('accepts every ending of "complete"', () => {
+    for (const w of ['Complete', 'Completed', 'Completion']) {
+      expect(classifySubject(`Identification ${w} - R260687 | Common House`)).toBe('identification');
+      expect(classifySubject(`Removal ${w} - R260687 | Common House`)).toBe('removal');
+    }
+  });
+
+  test('is case and punctuation insensitive', () => {
+    expect(classifySubject('IDENTIFICATION COMPLETED — R1 | Site')).toBe('identification');
+    expect(classifySubject('identification  completed: R1')).toBe('identification');
+  });
+
+  test('matches the post-* phrasings', () => {
+    expect(classifySubject('Post Identification - R1')).toBe('identification');
+    expect(classifySubject('Post-ID - R1')).toBe('identification');
+    expect(classifySubject('Post Removal - R1')).toBe('removal');
+  });
+
+  test('prefers identification when both words appear', () => {
+    expect(classifySubject('Identification Completed - R1 | Removal Completed')).toBe('identification');
+  });
+
+  test('rejects unrelated mail that merely mentions the words', () => {
+    expect(classifySubject('Re: Identification Expert Hiring Push: Performance Check-In')).toBeNull();
+    expect(classifySubject('Field Ops Digest - Thursday, September 24')).toBeNull();
+    expect(classifySubject('Removal quote request')).toBeNull();
+    expect(classifySubject('')).toBeNull();
+    expect(classifySubject(null)).toBeNull();
+    expect(classifySubject(undefined)).toBeNull();
+  });
+
+  test('does not match "id" inside an unrelated word', () => {
+    expect(classifySubject('Post identifier list')).toBeNull();
+  });
+});
