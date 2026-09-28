@@ -140,6 +140,8 @@ Manual trigger endpoints (all POST):
 
 Single file, ~1800 lines. No build step. Four tabs:
 
+**Mobile CSS lives at the very end of the `<style>` block, and must stay there.** Media queries add no specificity, so any desktop rule written after them overrides them at every width. That is how the phone layout was silently undone before. Add new component styles above the `══ Mobile ══` marker, and put their phone overrides inside it.
+
 ### Ops Tab (default)
 - **Left column**: Active Projects (`#projectList`) — currently rendered by `renderHubspotProjects()` which calls `/api/hubspot-active-projects`. Also has `renderProjects()` for local state projects (local state projects are legacy/manual entries).
 - **Right column** (420px fixed): Pending Site Confirmations (`#pendingPane`) — jobs awaiting post-auction site confirmation email. Each row has a `↗` HubSpot link (uses `e.hubspotId` stored on the confirmation object).
